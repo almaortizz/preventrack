@@ -1,0 +1,163 @@
+# PREVENTRACK
+# Propuesta de Proyecto
+
+## Introducción
+La transformación digital de los procesos comerciales se ha convertido en una necesidad para las empresas dedicadas a la distribución de productos, ya que permite optimizar tiempos, mejorar el control de las operaciones y facilitar la toma de decisiones. Actualmente, muchas pequeñas y medianas distribuidoras continúan realizando sus procesos de preventa, seguimiento de pedidos y control de rutas de forma manual, lo que ocasiona retrasos, errores en la información y dificultades para dar seguimiento a las actividades diarias.
+Con el propósito de atender estas necesidades, se propone el desarrollo de **Preventrack**, un sistema integral compuesto por una aplicación móvil y un panel administrativo web, orientado a digitalizar el proceso de preventa, la gestión de pedidos y el seguimiento de las operaciones comerciales de la distribuidora Bella Luz.
+El sistema permitirá centralizar la información generada por los colaboradores durante sus recorridos, facilitando el registro de pedidos, la administración de clientes y productos, la asignación de entregas, el control de rutas y la generación de reportes para apoyar la toma de decisiones.
+
+# Antecedentes
+La distribuidora Bella Luz se dedica a la comercialización y distribución de diversos productos de consumo para tiendas y pequeños comercios. Actualmente, el proceso de preventa se realiza mediante visitas presenciales de los colaboradores a los clientes, registrando los pedidos de forma manual.
+Posteriormente, los pedidos son revisados por el administrador para verificar la disponibilidad de los productos, preparar la mercancía y asignar la entrega correspondiente.
+Este proceso depende en gran medida del manejo manual de la información, lo que dificulta el seguimiento de los pedidos, incrementa el riesgo de errores y limita la disponibilidad inmediata de la información para la administración.
+Ante esta situación surge la necesidad de desarrollar un sistema que permita automatizar estos procesos, centralizar la información y mejorar la eficiencia operativa de la empresa.
+
+# Planteamiento del Problema
+Actualmente, la distribuidora Bella Luz realiza la mayor parte de sus procesos comerciales de forma manual, incluyendo el registro de pedidos, el seguimiento de entregas y el control de clientes.
+Esta situación genera diversos inconvenientes, entre ellos:
+- Retrasos en el registro de la información.
+- Dificultad para consultar el estado de los pedidos.
+- Falta de información centralizada.
+- Errores ocasionados por registros manuales.
+- Poco control sobre las rutas de trabajo.
+- Dificultad para obtener reportes oportunos.
+- Limitaciones para supervisar el desempeño de los colaboradores.
+Debido a ello resulta necesario implementar una solución tecnológica que permita administrar de forma eficiente la información generada durante las actividades de preventa y distribución.
+
+# Justificación
+El desarrollo de Preventrack permitirá optimizar los procesos comerciales de la distribuidora mediante la digitalización de las actividades relacionadas con la preventa y la gestión de pedidos.
+La implementación del sistema facilitará el acceso a la información en tiempo real, reducirá errores derivados de los procesos manuales y permitirá un mejor seguimiento de las operaciones realizadas por los colaboradores.
+Asimismo, proporcionará herramientas para la administración de clientes, productos, rutas y pedidos, además de generar reportes que apoyen la toma de decisiones dentro de la empresa.
+El proyecto contribuirá a mejorar la organización de la información, reducir tiempos administrativos y aumentar la eficiencia de los procesos comerciales.
+
+# Objetivo General
+Desarrollar un sistema integral compuesto por una aplicación móvil y un panel administrativo web que permita gestionar el proceso de preventa, administración de clientes, productos, pedidos, rutas y seguimiento de las operaciones comerciales de la distribuidora Bella Luz.
+
+# Objetivos Específicos
+- Desarrollar una aplicación móvil para el registro de pedidos durante las visitas a los clientes.
+- Implementar un panel administrativo para la gestión de usuarios, clientes, productos y pedidos.
+- Facilitar la administración y seguimiento del estado de los pedidos.
+- Registrar automáticamente la ubicación GPS al momento de realizar un pedido.
+- Administrar las rutas asignadas a los colaboradores.
+- Registrar la jornada laboral de los colaboradores.
+- Implementar el cálculo de cuotas y comisiones.
+- Permitir la impresión de tickets mediante impresoras térmicas Bluetooth.
+- Generar reportes que apoyen la toma de decisiones.
+- Permitir el funcionamiento parcial de la aplicación cuando no exista conexión a Internet.
+
+# Descripción General del Sistema
+Preventrack será un sistema compuesto por dos plataformas principales:
+
+## Aplicación móvil
+Será utilizada por los colaboradores para:
+- Iniciar sesión.
+- Registrar clientes.
+- Registrar pedidos.
+- Consultar productos.
+- Consultar clientes.
+- Consultar rutas.
+- Registrar jornadas laborales.
+- Imprimir tickets.
+- Trabajar sin conexión a Internet.
+
+## Panel Administrativo Web
+Será utilizado por el administrador para:
+- Administrar usuarios.
+- Administrar productos.
+- Administrar categorías.
+- Administrar clientes.
+- Consultar pedidos.
+- Asignar entregas.
+- Administrar rutas.
+- Configurar cuotas y comisiones.
+- Consultar reportes.
+- Supervisar las operaciones mediante un Dashboard.
+
+# Módulos del Sistema
+El sistema estará conformado por los siguientes módulos:
+- Inicio de sesión.
+- Gestión de usuarios.
+- Gestión de roles.
+- Gestión de productos.
+- Gestión de categorías.
+- Gestión de clientes.
+- Gestión de domicilios de clientes.
+- Gestión de pedidos.
+- Gestión de rutas.
+- Jornada laboral.
+- Cuotas y comisiones.
+- Impresión de tickets.
+- Dashboard administrativo.
+- Reportes.
+
+# Funcionalidades del Sistema
+Entre las principales funcionalidades del sistema se encuentran:
+- Autenticación de usuarios.
+- Administración de usuarios y roles.
+- Registro y administración de productos.
+- Administración de categorías.
+- Registro y administración de clientes.
+- Registro de múltiples domicilios por cliente.
+- Registro de pedidos desde dispositivos móviles.
+- Registro automático de fecha, hora y ubicación GPS al generar un pedido.
+- Consulta del estado de los pedidos.
+- Asignación de pedidos para su entrega.
+- Actualización del estado de los pedidos (Pendiente, En ruta, Entregado y Cancelado).
+- Administración de rutas comerciales.
+- Registro de jornadas laborales.
+- Configuración de cuotas y comisiones.
+- Cálculo automático de comisiones.
+- Impresión y reimpresión de tickets mediante impresoras térmicas Bluetooth.
+- Generación de reportes administrativos.
+- Funcionamiento sin conexión a Internet con sincronización automática cuando exista conectividad.
+- Dashboard con indicadores operativos.
+
+# Tecnologías Propuestas
+Para el desarrollo del sistema se propone utilizar las siguientes tecnologías:
+
+## Aplicación móvil
+- Flutter
+- Dart
+
+## Backend
+- Laravel
+- PHP
+
+## Base de Datos
+- MySQL
+- SQLite (modo online)
+
+## API
+- RESTful API
+
+## Control de versiones
+- Git
+- GitHub
+
+## Entorno de desarrollo
+- Visual Studio Code
+
+## Servidor
+- Docker
+
+# Alcances
+El proyecto contempla el desarrollo de un sistema integral que permita:
+- Digitalizar el proceso de preventa.
+- Centralizar la información comercial.
+- Administrar clientes, productos y pedidos.
+- Gestionar rutas de trabajo.
+- Registrar jornadas laborales.
+- Configurar cuotas y comisiones.
+- Generar reportes administrativos.
+- Trabajar sin conexión a Internet.
+- Imprimir tickets térmicos.
+- Facilitar el seguimiento de los pedidos desde su registro hasta su entrega.
+
+# Limitaciones
+El sistema contemplará las siguientes limitaciones para su primera versión:
+- No realizará descuentos automáticos del inventario al registrar pedidos.
+- La disponibilidad de productos será verificada manualmente por el administrador.
+- No enviará tickets mediante WhatsApp.
+- No almacenará fotografías ni firmas como evidencia de entrega.
+- El sistema estará orientado exclusivamente a las necesidades operativas de la distribuidora Bella Luz.
+- Las notificaciones internas no formarán parte de la primera versión del sistema.
