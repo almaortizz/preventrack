@@ -7,6 +7,14 @@ use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\DomicilioController;
 use App\Http\Controllers\VentaController;
+use App\Http\Controllers\CotizacionController;
+use App\Http\Controllers\DevolucionController;
+use App\Http\Controllers\VisitaController;
+use App\Http\Controllers\JornadaController;
+use App\Http\Controllers\CuotaController;
+use App\Http\Controllers\RutaController;
+use App\Http\Controllers\ComisionController;
+
 // -----------------------------------------------------------------
 // Rutas públicas (sin autenticación)
 // -----------------------------------------------------------------
@@ -38,6 +46,31 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('ventas/{venta}/marcar-no-entregado', [VentaController::class, 'marcarNoEntregado']);
     Route::post('ventas/{venta}/cancelar', [VentaController::class, 'cancelar']);
     Route::post('ventas/{venta}/marcar-impreso', [VentaController::class, 'marcarImpreso']);
+
+    Route::apiResource('cotizaciones', CotizacionController::class)->except(['destroy']);
+    Route::delete('cotizaciones/{cotizacion}', [CotizacionController::class, 'destroy']);
+    Route::post('cotizaciones/{cotizacion}/convertir', [CotizacionController::class, 'convertir']);
+
+    Route::apiResource('devoluciones', DevolucionController::class)->only(['index', 'store', 'show', 'destroy']);
+    Route::apiResource('visitas', VisitaController::class)->only(['index', 'store', 'show', 'destroy']);
+
+    Route::get('jornadas', [JornadaController::class, 'index']);
+    Route::get('jornadas/{jornada}', [JornadaController::class, 'show']);
+    Route::post('jornadas/iniciar', [JornadaController::class, 'iniciar']);
+    Route::post('jornadas/{jornada}/iniciar-comida', [JornadaController::class, 'iniciarComida']);
+    Route::post('jornadas/{jornada}/finalizar-comida', [JornadaController::class, 'finalizarComida']);
+    Route::post('jornadas/{jornada}/finalizar', [JornadaController::class, 'finalizar']);
+
+    Route::apiResource('cuotas', CuotaController::class);
+
+    Route::apiResource('rutas', RutaController::class)->only(['index', 'store', 'show', 'destroy']);
+    Route::post('rutas/{ruta}/reordenar', [RutaController::class, 'reordenar']);
+    Route::post('rutas/{ruta}/visitar/{detalleRutaId}', [RutaController::class, 'marcarVisitada']);
+
+    Route::get('comisiones', [ComisionController::class, 'index']);
+    Route::get('comisiones/{comision}', [ComisionController::class, 'show']);
+    Route::post('cuotas/{cuota}/evaluar', [ComisionController::class, 'evaluarCuota']);
+    Route::post('comisiones/{comision}/marcar-pagada', [ComisionController::class, 'marcarPagada']);
     // Aquí se irán agregando los recursos en los pasos siguientes:
     // productos, categorias, clientes, ventas, cotizaciones,
     // devoluciones, visitas, jornadas, rutas, comisiones, reportes...
