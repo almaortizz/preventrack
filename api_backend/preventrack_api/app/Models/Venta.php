@@ -14,6 +14,14 @@ class Venta extends Model
         'fecha_impresion', 'sincronizado', 'notas',
     ];
 
+    protected $casts = [
+    'fecha_hora' => 'datetime',
+    'fecha_entrega' => 'date',
+    'fecha_impresion' => 'datetime',
+    'impreso' => 'boolean',
+    'sincronizado' => 'boolean',
+    ];
+
     public function domicilio()
     {
         return $this->belongsTo(Domicilio::class, 'domicilio_id');
