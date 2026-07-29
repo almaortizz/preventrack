@@ -16,6 +16,7 @@ use App\Http\Controllers\RutaController;
 use App\Http\Controllers\ComisionController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\DashboardController;
 
 // -----------------------------------------------------------------
 // Rutas públicas (sin autenticación)
@@ -84,6 +85,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('usuarios/{usuario}/bloquear', [UsuarioController::class, 'bloquear']);
     Route::post('usuarios/{usuario}/desbloquear', [UsuarioController::class, 'desbloquear']);
     Route::post('usuarios/bloquear-todos', [UsuarioController::class, 'bloquearTodos']);
+
+    Route::get('dashboard', [DashboardController::class, 'index']);
     // Aquí se irán agregando los recursos en los pasos siguientes:
     // productos, categorias, clientes, ventas, cotizaciones,
     // devoluciones, visitas, jornadas, rutas, comisiones, reportes...
