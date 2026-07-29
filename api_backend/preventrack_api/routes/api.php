@@ -15,6 +15,7 @@ use App\Http\Controllers\CuotaController;
 use App\Http\Controllers\RutaController;
 use App\Http\Controllers\ComisionController;
 use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\UsuarioController;
 
 // -----------------------------------------------------------------
 // Rutas públicas (sin autenticación)
@@ -78,6 +79,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('reportes/productos', [ReporteController::class, 'productos']);
     Route::get('reportes/jornadas', [ReporteController::class, 'jornadas']);
     Route::get('reportes/comisiones', [ReporteController::class, 'comisiones']);
+
+    Route::apiResource('usuarios', UsuarioController::class);
+    Route::post('usuarios/{usuario}/bloquear', [UsuarioController::class, 'bloquear']);
+    Route::post('usuarios/{usuario}/desbloquear', [UsuarioController::class, 'desbloquear']);
+    Route::post('usuarios/bloquear-todos', [UsuarioController::class, 'bloquearTodos']);
     // Aquí se irán agregando los recursos en los pasos siguientes:
     // productos, categorias, clientes, ventas, cotizaciones,
     // devoluciones, visitas, jornadas, rutas, comisiones, reportes...
