@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -25,7 +26,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (success && mounted) {
-      Navigator.pushReplacementNamed(context, '/home');
+      final terminos = authProvider.usuario?['terminos_aceptados'] ?? false;
+      if (terminos == true || terminos == 1) {
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        Navigator.pushReplacementNamed(context, '/legal');
+      }
     }
   }
 
@@ -39,135 +45,201 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: Form(
-            key: _formKey,
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo / Título
-                Icon(Icons.local_shipping, size: 80, color: Colors.blue[700]),
-                const SizedBox(height: 16),
-                Text(
-                  'PREVENTRACK',
+                // Logo e identidad
+                Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: Image.asset('assets/images/logo.png'),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Bienvenido',
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.blue[700],
-                    letterSpacing: 2,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Text(
-                  'Sistema de Preventa y Distribución',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-                const SizedBox(height: 48),
-
-                // Campo usuario
-                TextFormField(
-                  controller: _usuarioController,
-                  decoration: InputDecoration(
-                    labelText: 'Usuario',
-                    prefixIcon: const Icon(Icons.person),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
+                  'Inicia sesión para continuar en\nPreventrack',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textPrimary.withValues(alpha: 0.55),
+                    height: 1.4,
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Ingresa tu usuario';
-                    }
-                    return null;
-                  },
+                ),
+                const SizedBox(height: 36),
+
+                // Card con formulario
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: AppColors.cardBorder),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 28,
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          // Campo usuario
+                          TextFormField(
+                            controller: _usuarioController,
+                            decoration: const InputDecoration(
+                              labelText: 'Usuario',
+                              hintText: 'Ingresa tu usuario',
+                              prefixIcon: Icon(
+                                Icons.person_outline,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Ingresa tu usuario';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 18),
+
+                          // Campo password
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _ocultarPassword,
+                            decoration: InputDecoration(
+                              labelText: 'Contraseña',
+                              hintText: '••••••••',
+                              prefixIcon: const Icon(
+                                Icons.lock_outline,
+                                color: AppColors.primary,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _ocultarPassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  color: AppColors.primary,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _ocultarPassword = !_ocultarPassword;
+                                  });
+                                },
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Ingresa tu contraseña';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Mensaje de error
+                          Consumer<AuthProvider>(
+                            builder: (context, auth, _) {
+                              if (auth.error != null) {
+                                return Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error.withValues(
+                                      alpha: 0.08,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: AppColors.error.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.error_outline,
+                                        color: AppColors.error,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          auth.error!,
+                                          style: const TextStyle(
+                                            color: AppColors.error,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+
+                          // Botón login
+                          Consumer<AuthProvider>(
+                            builder: (context, auth, _) {
+                              return ElevatedButton(
+                                onPressed: auth.isLoading ? null : _login,
+                                child: auth.isLoading
+                                    ? const SizedBox(
+                                        height: 22,
+                                        width: 22,
+                                        child: CircularProgressIndicator(
+                                          color: AppColors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : const Text('Iniciar Sesión'),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+                Text(
+                  '© 2026 Preventrack Logistics.\nTodos los derechos reservados.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textPrimary.withValues(alpha: 0.35),
+                    height: 1.4,
+                  ),
                 ),
                 const SizedBox(height: 16),
-
-                // Campo password
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _ocultarPassword,
-                  decoration: InputDecoration(
-                    labelText: 'Contraseña',
-                    prefixIcon: const Icon(Icons.lock),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _ocultarPassword
-                            ? Icons.visibility
-                            : Icons.visibility_off,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _ocultarPassword = !_ocultarPassword;
-                        });
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Ingresa tu contraseña';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-
-                // Mensaje de error
-                Consumer<AuthProvider>(
-                  builder: (context, auth, _) {
-                    if (auth.error != null) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          auth.error!,
-                          style: const TextStyle(
-                            color: Colors.red,
-                            fontSize: 14,
-                          ),
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-
-                // Botón login
-                Consumer<AuthProvider>(
-                  builder: (context, auth, _) {
-                    return SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: auth.isLoading ? null : _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[700],
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: auth.isLoading
-                            ? const CircularProgressIndicator(
-                                color: Colors.white,
-                              )
-                            : const Text(
-                                'INICIAR SESIÓN',
-                                style: TextStyle(fontSize: 16),
-                              ),
-                      ),
-                    );
-                  },
-                ),
               ],
             ),
           ),
