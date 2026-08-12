@@ -121,4 +121,15 @@ class UsuarioController extends Controller
 
         return response()->json(['message' => 'Usuario eliminado correctamente.']);
     }
+
+    public function aceptarTerminos(Request $request)
+    {
+        $usuario = $request->user();
+        $usuario->update([
+            'terminos_aceptados' => true,
+            'fecha_aceptacion_terminos' => now(),
+        ]);
+
+        return response()->json(['message' => 'Términos aceptados correctamente.', 'usuario' => $usuario]);
+    }
 }

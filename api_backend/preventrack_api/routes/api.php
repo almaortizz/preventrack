@@ -81,12 +81,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('reportes/jornadas', [ReporteController::class, 'jornadas']);
     Route::get('reportes/comisiones', [ReporteController::class, 'comisiones']);
 
+    Route::post('usuarios/aceptar-terminos', [UsuarioController::class, 'aceptarTerminos']);
     Route::apiResource('usuarios', UsuarioController::class);
     Route::post('usuarios/{usuario}/bloquear', [UsuarioController::class, 'bloquear']);
     Route::post('usuarios/{usuario}/desbloquear', [UsuarioController::class, 'desbloquear']);
     Route::post('usuarios/bloquear-todos', [UsuarioController::class, 'bloquearTodos']);
 
     Route::get('dashboard', [DashboardController::class, 'index']);
+
     // Aquí se irán agregando los recursos en los pasos siguientes:
     // productos, categorias, clientes, ventas, cotizaciones,
     // devoluciones, visitas, jornadas, rutas, comisiones, reportes...
