@@ -1,0 +1,19 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00AEEF"/>
+      <stop offset="100%" stop-color="#004B87"/>
+    </linearGradient>
+    <linearGradient id="letterGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3BC7F5"/>
+      <stop offset="100%" stop-color="#004B87"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="60" cy="60" r="56" fill="#ffffff"/>
+
+  <path d="M60 8a52 52 0 1 0 36.8 88.8A46 46 0 1 1 60 8Z" fill="url(#ringGrad)"/>
+  <path d="M24 34a44 44 0 0 1 66-10" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.55"/>
+
+  <text x="60" y="80" font-family="Arial, Inter, sans-serif" font-weight="800" font-size="46" text-anchor="middle" fill="url(#letterGrad)">BL</text>
+</svg>

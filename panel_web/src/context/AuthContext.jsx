@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
   async function login(usuario, password) {
     const res = await client.post('/login', { usuario, password })
     localStorage.setItem('pt_token', res.data.token)
-    setUser(res.data.user ?? null)
+    setUser(res.data.usuario ?? null)
     return res.data
   }
 

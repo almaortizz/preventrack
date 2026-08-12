@@ -5,6 +5,7 @@ import DashboardLayout from './layouts/DashboardLayout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
+import Clientes from './pages/Clientes'
 
 export default function App() {
   return (
@@ -20,7 +21,7 @@ export default function App() {
           }
         >
           <Route index element={<Dashboard />} />
-          <Route path="clientes" element={<Placeholder title="Clientes" />} />
+          <Route path="clientes" element={<Clientes />} />
           <Route
             path="productos"
             element={<Placeholder title="Productos" />}
