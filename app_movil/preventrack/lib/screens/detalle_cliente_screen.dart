@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
+import 'catalogo_productos_screen.dart';
 
 class DetalleClienteScreen extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -377,7 +378,13 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
               height: 50,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  // TODO: navegar a nuevo pedido
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          CatalogoProductosScreen(cliente: widget.cliente),
+                    ),
+                  );
                 },
                 icon: const Icon(Icons.shopping_cart_outlined, size: 20),
                 label: const Text('Nuevo Pedido'),
