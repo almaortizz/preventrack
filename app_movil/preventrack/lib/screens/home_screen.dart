@@ -6,6 +6,8 @@ import 'dashboard_screen.dart';
 import 'clientes_screen.dart';
 import 'pedidos_screen.dart';
 import 'entregas_screen.dart';
+import 'jornada_screen.dart';
+import 'perfil_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -149,6 +151,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: const Text('Mi perfil'),
                 onTap: () {
                   Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PerfilScreen()),
+                  );
                 },
               ),
               ListTile(
@@ -159,6 +165,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: const Text('Jornada laboral'),
                 onTap: () {
                   Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const JornadaScreen()),
+                  );
                 },
               ),
               ListTile(
