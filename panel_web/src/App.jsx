@@ -6,6 +6,9 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
 import Clientes from './pages/Clientes'
+import Categorias from './pages/Categorias'
+import Productos from './pages/Productos'
+
 
 export default function App() {
   return (
@@ -22,14 +25,16 @@ export default function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="clientes" element={<Clientes />} />
+
           <Route
             path="productos"
-            element={<Placeholder title="Productos" />}
-          />
+            element={<Productos />}
+            />
           <Route
-            path="categorias"
-            element={<Placeholder title="Categorías" />}
+          path="categorias"
+          element={<Categorias />}
           />
+
           <Route path="ventas" element={<Placeholder title="Ventas" />} />
           <Route
             path="cotizaciones"
