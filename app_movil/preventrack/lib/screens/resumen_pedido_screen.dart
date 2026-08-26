@@ -118,8 +118,8 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
         'notas': _notasController.text.isNotEmpty
             ? _notasController.text
             : null,
-        'fecha_inicio_creacion': widget.horaInicio.toUtc().toIso8601String(),
-        'fecha_fin_creacion': DateTime.now().toUtc().toIso8601String(),
+        'fecha_inicio_creacion': widget.horaInicio.toIso8601String(),
+        'fecha_fin_creacion': DateTime.now().toIso8601String(),
         'descuento': _descuento,
       };
 
