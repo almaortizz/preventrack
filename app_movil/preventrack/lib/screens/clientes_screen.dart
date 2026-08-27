@@ -16,6 +16,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
   List<dynamic> _clientes = [];
   bool _isLoading = true;
   String _filtroActual = 'Todos';
+  String _busqueda = '';
 
   @override
   void initState() {
@@ -45,38 +46,58 @@ class _ClientesScreenState extends State<ClientesScreen> {
     }
   }
 
-  Future<void> _buscarClientes(String query) async {
-    setState(() => _isLoading = true);
-    try {
-      final endpoint = query.isEmpty ? 'clientes' : 'clientes?nombre=$query';
-      final result = await _api.get(endpoint);
-      if (result['statusCode'] == 200) {
-        final data = result['data'];
-        setState(() {
-          _clientes = data is List ? data : (data['data'] ?? []);
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
+  List<dynamic> get _clientesFiltrados {
+    List<dynamic> resultado = _clientes;
+
+    // Filtro por chip (Todos / Activos)
+    if (_filtroActual == 'Activos') {
+      resultado = resultado.where((c) => c['estado'] == 'activo').toList();
     }
+
+    // Filtro por búsqueda (nombre, folio, dirección)
+    if (_busqueda.isNotEmpty) {
+      final query = _busqueda.toLowerCase();
+      resultado = resultado.where((c) {
+        final nombre = (c['nombre_negocio'] ?? '').toString().toLowerCase();
+        final folio = (c['folio'] ?? '').toString().toLowerCase();
+        final propietario = (c['propietario'] ?? '').toString().toLowerCase();
+
+        // Buscar también en domicilios
+        String direccion = '';
+        final domicilios = c['domicilios'] as List<dynamic>?;
+        if (domicilios != null && domicilios.isNotEmpty) {
+          direccion = (domicilios[0]['direccion'] ?? '').toString().toLowerCase();
+        }
+
+        return nombre.contains(query) ||
+            folio.contains(query) ||
+            propietario.contains(query) ||
+            direccion.contains(query);
+      }).toList();
+    }
+
+    return resultado;
   }
 
   @override
   Widget build(BuildContext context) {
+    final clientesFiltrados = _clientesFiltrados;
+
     return Stack(
       children: [
         Column(
           children: [
-            // Barra de busqueda
+            // Barra de búsqueda
             Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               color: AppColors.white,
               child: TextField(
                 controller: _buscarController,
-                onChanged: (value) => _buscarClientes(value),
+                onChanged: (value) {
+                  setState(() => _busqueda = value);
+                },
                 decoration: InputDecoration(
-                  hintText: 'Buscar por nombre, ID o direccion',
+                  hintText: 'Buscar por nombre, ID o dirección',
                   hintStyle: TextStyle(
                     fontSize: 14,
                     color: AppColors.textPrimary.withValues(alpha: 0.4),
@@ -85,6 +106,19 @@ class _ClientesScreenState extends State<ClientesScreen> {
                     Icons.search,
                     color: AppColors.primary,
                   ),
+                  suffixIcon: _busqueda.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.close,
+                            size: 18,
+                            color: AppColors.textPrimary.withValues(alpha: 0.4),
+                          ),
+                          onPressed: () {
+                            _buscarController.clear();
+                            setState(() => _busqueda = '');
+                          },
+                        )
+                      : null,
                   filled: true,
                   fillColor: AppColors.background,
                   border: OutlineInputBorder(
@@ -138,7 +172,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${_clientes.length} Clientes Registrados',
+                        '${clientesFiltrados.length} Clientes Registrados',
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.textPrimary.withValues(alpha: 0.5),
@@ -163,19 +197,19 @@ class _ClientesScreenState extends State<ClientesScreen> {
                         color: AppColors.primary,
                       ),
                     )
-                  : _clientes.isEmpty
-                  ? _buildEmptyState()
-                  : RefreshIndicator(
-                      onRefresh: _cargarClientes,
-                      color: AppColors.primary,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-                        itemCount: _clientes.length,
-                        itemBuilder: (context, index) {
-                          return _buildClienteCard(_clientes[index]);
-                        },
-                      ),
-                    ),
+                  : clientesFiltrados.isEmpty
+                      ? _buildEmptyState()
+                      : RefreshIndicator(
+                          onRefresh: _cargarClientes,
+                          color: AppColors.primary,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+                            itemCount: clientesFiltrados.length,
+                            itemBuilder: (context, index) {
+                              return _buildClienteCard(clientesFiltrados[index]);
+                            },
+                          ),
+                        ),
             ),
           ],
         ),
@@ -185,7 +219,15 @@ class _ClientesScreenState extends State<ClientesScreen> {
           bottom: 16,
           right: 16,
           child: FloatingActionButton(
-            onPressed: () {},
+            onPressed: () {
+              // TODO: Navegar a pantalla de crear cliente
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Crear cliente — próximamente'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
             backgroundColor: AppColors.primary,
             child: const Icon(Icons.person_add, color: AppColors.white),
           ),
@@ -225,20 +267,22 @@ class _ClientesScreenState extends State<ClientesScreen> {
   Widget _buildClienteCard(Map<String, dynamic> cliente) {
     final nombre =
         cliente['nombre_negocio'] ?? cliente['nombre'] ?? 'Sin nombre';
-    final codigo = cliente['codigo'] ?? 'N/A';
+    final folio = cliente['folio'] ?? 'N/A';
     final domicilios = cliente['domicilios'] as List<dynamic>?;
-    String direccion = 'Sin direccion';
+    String direccion = 'Sin dirección';
     if (domicilios != null && domicilios.isNotEmpty) {
-      final dom = domicilios[0];
-      direccion = dom['calle'] ?? dom['direccion'] ?? 'Sin direccion';
+      direccion = domicilios[0]['direccion'] ?? 'Sin dirección';
     }
+
+    final estado = cliente['estado'] ?? 'activo';
 
     final palabras = nombre.split(' ');
     String iniciales;
     if (palabras.length >= 2) {
       iniciales = '${palabras[0][0]}${palabras[1][0]}'.toUpperCase();
     } else {
-      iniciales = nombre.substring(0, nombre.length >= 2 ? 2 : 1).toUpperCase();
+      iniciales =
+          nombre.substring(0, nombre.length >= 2 ? 2 : 1).toUpperCase();
     }
 
     final colors = [
@@ -314,18 +358,22 @@ class _ClientesScreenState extends State<ClientesScreen> {
                           Container(
                             width: 6,
                             height: 6,
-                            decoration: const BoxDecoration(
-                              color: AppColors.success,
+                            decoration: BoxDecoration(
+                              color: estado == 'activo'
+                                  ? AppColors.success
+                                  : AppColors.error,
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 4),
-                          const Text(
-                            'Al dia',
+                          Text(
+                            estado == 'activo' ? 'Al día' : 'Inactivo',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
-                              color: AppColors.success,
+                              color: estado == 'activo'
+                                  ? AppColors.success
+                                  : AppColors.error,
                             ),
                           ),
                         ],
@@ -334,7 +382,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'ID: #$codigo',
+                    'ID: #$folio',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.textPrimary.withValues(alpha: 0.45),
@@ -390,7 +438,9 @@ class _ClientesScreenState extends State<ClientesScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'No hay clientes registrados',
+            _busqueda.isNotEmpty
+                ? 'No se encontraron resultados'
+                : 'No hay clientes registrados',
             style: TextStyle(
               fontSize: 15,
               color: AppColors.textPrimary.withValues(alpha: 0.45),
