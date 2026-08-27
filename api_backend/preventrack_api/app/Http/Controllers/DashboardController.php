@@ -17,6 +17,9 @@ class DashboardController extends Controller
         $inicioSemana = Carbon::now('America/Mexico_City')->startOfWeek()->toDateString();
         $finSemana = Carbon::now('America/Mexico_City')->endOfWeek()->toDateString();
 
+        $inicioMes = Carbon::now('America/Mexico_City')->startOfMonth()->toDateString();
+        $finMes = Carbon::now('America/Mexico_City')->endOfMonth()->toDateString();
+
         // --- Contadores por estado ---
         $pendientes = Venta::where('estado', 'pendiente')->count();
         $enRuta = Venta::where('estado', 'en_ruta')->count();
@@ -39,6 +42,11 @@ class DashboardController extends Controller
             ->whereDate('fecha_entrega', '<=', $finSemana)
             ->sum('total');
 
+        $totalVentasMes = Venta::where('estado', 'entregado')
+            ->whereDate('fecha_entrega', '>=', $inicioMes)
+            ->whereDate('fecha_entrega', '<=', $finMes)
+            ->sum('total');
+
         // --- Últimos 10 pedidos ---
         $ultimosPedidos = Venta::with(['domicilio', 'vendedor'])
             ->orderBy('created_at', 'desc')
@@ -59,6 +67,7 @@ class DashboardController extends Controller
             'ventas' => [
                 'total_hoy'    => round($totalVentasHoy, 2),
                 'total_semana' => round($totalVentasSemana, 2),
+                'total_mes'    => round($totalVentasMes, 2),
             ],
             'ultimos_pedidos' => $ultimosPedidos,
             'totales' => [

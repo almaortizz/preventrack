@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import client from '../api/client'
 
+
+
 const emptyForm = {
   folio: '',
   nombre_negocio: '',

@@ -8,6 +8,7 @@ import Placeholder from './pages/Placeholder'
 import Clientes from './pages/Clientes'
 import Categorias from './pages/Categorias'
 import Productos from './pages/Productos'
+import Preventistas from './pages/Preventistas'
 
 
 export default function App() {
@@ -25,7 +26,7 @@ export default function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="clientes" element={<Clientes />} />
-
+          <Route path="preventistas" element={<Preventistas />} />
           <Route
             path="productos"
             element={<Productos />}

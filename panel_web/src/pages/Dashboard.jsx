@@ -15,6 +15,7 @@ export default function Dashboard() {
   const cards = [
     { label: 'Ventas hoy', value: data ? `$${data.ventas.total_hoy}` : '—' },
     { label: 'Ventas de la semana', value: data ? `$${data.ventas.total_semana}` : '—' },
+    { label: 'Ventas del mes', value: data ? `$${data.ventas.total_mes}` : '—' },
     { label: 'Pendientes', value: data ? data.contadores.pendientes : '—' },
     { label: 'En ruta', value: data ? data.contadores.en_ruta : '—' },
     { label: 'Entregados hoy', value: data ? data.contadores.entregados_hoy : '—' },
