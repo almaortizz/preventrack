@@ -93,4 +93,21 @@ class DashboardController extends Controller
             ],
         ]);
     }
+
+        public function rutaDelDia()
+    {
+        $hoy = Carbon::now('America/Mexico_City')->toDateString();
+        $userId = auth('sanctum')->id();
+
+        $ruta = \App\Models\Ruta::with(['detalle.domicilio.cliente'])
+            ->where('usuario_id', $userId)
+            ->where('fecha', $hoy)
+            ->first();
+
+        if (!$ruta) {
+            return response()->json(['ruta' => null]);
+        }
+
+        return response()->json(['ruta' => $ruta]);
+    }
 }
