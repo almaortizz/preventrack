@@ -75,7 +75,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Buen dia, $nombre',
+                  'Buen d\u00eda, $nombre',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -222,6 +222,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
+                _buildCuotaSemanal(_dashboardData?['cuota']),
+                const SizedBox(height: 16),
                 _buildProgresoDelDia(pendientes, enRuta, entregadosHoy),
                 const SizedBox(height: 20),
                 _buildUltimosPedidos(ultimosPedidos),
@@ -242,6 +244,140 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildCuotaSemanal(Map<String, dynamic>? cuota) {
+    if (cuota == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.flag_outlined,
+              color: AppColors.textPrimary.withValues(alpha: 0.3),
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Sin cuota asignada esta semana',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textPrimary.withValues(alpha: 0.45),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final cumplida = cuota['cumplida'] == true;
+    final porcentaje = (cuota['porcentaje'] as num).toDouble();
+    final objetivo = cuota['monto_objetivo'];
+    final ventasSemana = cuota['ventas_semana'];
+    final faltante = cuota['faltante'];
+    final progreso = porcentaje / 100;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: cumplida
+              ? AppColors.success.withValues(alpha: 0.3)
+              : AppColors.error.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Cuota Semanal',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: cumplida
+                      ? AppColors.success.withValues(alpha: 0.1)
+                      : AppColors.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  cumplida ? 'CUMPLIDA' : 'PENDIENTE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: cumplida ? AppColors.success : AppColors.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '\$${_formatMonto(ventasSemana)}',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: cumplida ? AppColors.success : AppColors.error,
+                ),
+              ),
+              Text(
+                'de \$${_formatMonto(objetivo)}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: progreso > 1 ? 1 : progreso,
+              minHeight: 10,
+              backgroundColor: AppColors.cardBorder,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                cumplida ? AppColors.success : AppColors.error,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            cumplida
+                ? 'Cuota alcanzada - ${porcentaje.toStringAsFixed(0)}%'
+                : 'Faltan \$${_formatMonto(faltante)} para cumplir la cuota',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: cumplida ? AppColors.success : AppColors.error,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProgresoDelDia(int pendientes, int enRuta, int entregados) {
     final total = pendientes + enRuta + entregados;
     final progreso = total > 0 ? entregados / total : 0.0;
@@ -259,7 +395,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Progreso del dia',
+                'Progreso del d\u00eda',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -348,7 +484,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              'Ultimos pedidos',
+              '\u00daltimos pedidos',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,

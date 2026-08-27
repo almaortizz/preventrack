@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../config/app_theme.dart';
+import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import 'confirmacion_pedido_screen.dart';
-import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
 
 class ResumenPedidoScreen extends StatefulWidget {
   final Map<String, dynamic> cliente;
   final Map<int, Map<String, dynamic>> carrito;
+  final DateTime horaInicio;
 
   const ResumenPedidoScreen({
     super.key,
     required this.cliente,
     required this.carrito,
+    required this.horaInicio,
   });
 
   @override
@@ -24,11 +26,11 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
   final TextEditingController _notasController = TextEditingController();
   late Map<int, Map<String, dynamic>> _carrito;
   bool _isLoading = false;
+  double _descuento = 0;
 
   @override
   void initState() {
     super.initState();
-    // Copia del carrito para poder modificar
     _carrito = Map.from(widget.carrito);
   }
 
@@ -38,7 +40,7 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
     super.dispose();
   }
 
-  double get _total {
+  double get _subtotal {
     double total = 0;
     for (var item in _carrito.values) {
       final precio =
@@ -46,6 +48,11 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
       total += precio * (item['cantidad'] as int);
     }
     return total;
+  }
+
+  double get _total {
+    final t = _subtotal - _descuento;
+    return t < 0 ? 0 : t;
   }
 
   int get _totalItems {
@@ -75,7 +82,6 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Obtener domicilio del cliente
       final domicilios = widget.cliente['domicilios'] as List<dynamic>?;
       int? domicilioId;
       if (domicilios != null && domicilios.isNotEmpty) {
@@ -94,7 +100,9 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
         return;
       }
 
-      // Armar lista de productos
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final usuarioId = auth.usuario?['id'];
+
       final productos = _carrito.values.map((item) {
         return {
           'producto_id': item['producto']['id'],
@@ -103,10 +111,6 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
         };
       }).toList();
 
-      // Obtener ID del usuario logueado
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final usuarioId = auth.usuario?['id'];
-
       final body = {
         'domicilio_id': domicilioId,
         'preventista_vendedor_id': usuarioId,
@@ -114,6 +118,9 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
         'notas': _notasController.text.isNotEmpty
             ? _notasController.text
             : null,
+        'fecha_inicio_creacion': widget.horaInicio.toIso8601String(),
+        'fecha_fin_creacion': DateTime.now().toIso8601String(),
+        'descuento': _descuento,
       };
 
       final result = await _api.post('ventas', body: body);
@@ -204,7 +211,6 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Titulo articulos
                         Text(
                           'Articulos (${_carrito.length})',
                           style: const TextStyle(
@@ -225,7 +231,6 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Lista de productos
                         ..._carrito.entries.map(
                           (entry) => _buildItemCard(entry.key, entry.value),
                         ),
@@ -271,7 +276,46 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
+
+                        // Descuento
+                        const Text(
+                          'DESCUENTO (OPCIONAL)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          keyboardType: TextInputType.number,
+                          onChanged: (value) {
+                            setState(() {
+                              _descuento = double.tryParse(value) ?? 0;
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: '0.00',
+                            prefixText: '\$ ',
+                            filled: true,
+                            fillColor: AppColors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: AppColors.cardBorder,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: AppColors.cardBorder,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
 
                         // Totales
                         Container(
@@ -297,7 +341,7 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
                                     ),
                                   ),
                                   Text(
-                                    '\$${_total.toStringAsFixed(2)}',
+                                    '\$${_subtotal.toStringAsFixed(2)}',
                                     style: const TextStyle(
                                       fontSize: 14,
                                       color: AppColors.textPrimary,
@@ -305,6 +349,31 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
                                   ),
                                 ],
                               ),
+                              if (_descuento > 0) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Descuento',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.success.withValues(
+                                          alpha: 0.8,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      '-\$${_descuento.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                               const SizedBox(height: 10),
                               Container(
                                 height: 1,
@@ -343,7 +412,6 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
                   ),
                 ),
 
-                // Botones fijos abajo
                 Container(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                   decoration: BoxDecoration(
@@ -420,7 +488,6 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
       ),
       child: Row(
         children: [
-          // Imagen placeholder
           Container(
             width: 52,
             height: 52,
@@ -435,7 +502,6 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
             ),
           ),
           const SizedBox(width: 12),
-          // Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,7 +534,6 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
               ],
             ),
           ),
-          // Controles cantidad
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [

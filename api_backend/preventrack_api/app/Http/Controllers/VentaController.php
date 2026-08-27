@@ -40,6 +40,9 @@ class VentaController extends Controller
             'latitud_registro' => 'nullable|numeric',
             'longitud_registro' => 'nullable|numeric',
             'notas' => 'nullable|string',
+            'descuento' => 'nullable|numeric|min:0',
+            'fecha_inicio_creacion' => 'nullable|date',
+            'fecha_fin_creacion' => 'nullable|date',
             'productos' => 'required|array|min:1',
             'productos.*.producto_id' => 'required|exists:productos,id',
             'productos.*.cantidad' => 'required|integer|min:1',
@@ -63,16 +66,23 @@ class VentaController extends Controller
                 ];
             }
 
+            $descuento = $datos['descuento'] ?? 0;
+            $totalFinal = $total - $descuento;
+            if ($totalFinal < 0) $totalFinal = 0;
+
             $venta = Venta::create([
                 'numero_orden' => 'PED-' . strtoupper(uniqid()),
                 'domicilio_id' => $datos['domicilio_id'],
                 'preventista_vendedor_id' => $datos['preventista_vendedor_id'],
                 'fecha_hora' => now(),
-                'total' => $total,
+                'total' => $totalFinal,
+                'descuento' => $descuento,
                 'estado' => 'pendiente',
                 'latitud_registro' => $datos['latitud_registro'] ?? null,
                 'longitud_registro' => $datos['longitud_registro'] ?? null,
                 'notas' => $datos['notas'] ?? null,
+                'fecha_inicio_creacion' => $datos['fecha_inicio_creacion'] ?? null,
+                'fecha_fin_creacion' => $datos['fecha_fin_creacion'] ?? null,
             ]);
 
             $venta->detalle()->createMany($detalles);

@@ -20,12 +20,14 @@ class _CatalogoProductosScreenState extends State<CatalogoProductosScreen> {
   List<dynamic> _categorias = [];
   bool _isLoading = true;
   String _categoriaSeleccionada = 'Todo';
+  late DateTime _horaInicio;
 
   final Map<int, Map<String, dynamic>> _carrito = {};
 
   @override
   void initState() {
     super.initState();
+    _horaInicio = DateTime.now();
     _cargarDatos();
   }
 
@@ -314,6 +316,7 @@ class _CatalogoProductosScreenState extends State<CatalogoProductosScreen> {
                           builder: (_) => ResumenPedidoScreen(
                             cliente: widget.cliente,
                             carrito: _carrito,
+                            horaInicio: _horaInicio,
                           ),
                         ),
                       );

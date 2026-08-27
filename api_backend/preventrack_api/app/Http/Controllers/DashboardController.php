@@ -7,6 +7,7 @@ use App\Models\Cliente;
 use App\Models\Producto;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use App\Models\Cuota;
 
 class DashboardController extends Controller
 {
@@ -57,12 +58,37 @@ class DashboardController extends Controller
         $totalClientes = Cliente::count();
         $totalProductos = Producto::count();
 
+                // --- Cuota semanal ---
+        $cuota = Cuota::where('fecha_inicio_semana', '<=', $hoy)
+            ->where('fecha_fin_semana', '>=', $hoy)
+            ->where('usuario_id', auth('sanctum')->id())
+            ->first();
+
+        $ventasSemana = $totalVentasSemana;
+        $cuotaData = null;
+        if ($cuota) {
+            $cuotaData = [
+                'monto_objetivo' => round($cuota->monto_objetivo, 2),
+                'monto_comision' => round($cuota->monto_comision, 2),
+                'ventas_semana'  => round($ventasSemana, 2),
+                'cumplida'       => $ventasSemana >= $cuota->monto_objetivo,
+                'porcentaje'     => $cuota->monto_objetivo > 0 ? round(($ventasSemana / $cuota->monto_objetivo) * 100, 1) : 0,
+                'faltante'       => round(max(0, $cuota->monto_objetivo - $ventasSemana), 2),
+            ];
+        }
+
         return response()->json([
             'contadores' => [
                 'pendientes'     => $pendientes,
                 'en_ruta'        => $enRuta,
                 'entregados_hoy' => $entregadosHoy,
                 'cancelados_hoy' => $canceladosHoy,
+            ],
+            'cuota' => $cuotaData,
+            'ultimos_pedidos' => $ultimosPedidos,
+            'totales' => [
+                'clientes'  => $totalClientes,
+                'productos' => $totalProductos,
             ],
             'ventas' => [
                 'total_hoy'    => round($totalVentasHoy, 2),
@@ -75,5 +101,22 @@ class DashboardController extends Controller
                 'productos' => $totalProductos,
             ],
         ]);
+    }
+
+        public function rutaDelDia()
+    {
+        $hoy = Carbon::now('America/Mexico_City')->toDateString();
+        $userId = auth('sanctum')->id();
+
+        $ruta = \App\Models\Ruta::with(['detalle.domicilio.cliente'])
+            ->where('usuario_id', $userId)
+            ->where('fecha', $hoy)
+            ->first();
+
+        if (!$ruta) {
+            return response()->json(['ruta' => null]);
+        }
+
+        return response()->json(['ruta' => $ruta]);
     }
 }

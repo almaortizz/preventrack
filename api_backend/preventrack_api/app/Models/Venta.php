@@ -12,6 +12,7 @@ class Venta extends Model
         'latitud_registro', 'longitud_registro', 'fecha_entrega',
         'hora_entrega', 'motivo_cancelacion', 'impreso',
         'fecha_impresion', 'sincronizado', 'notas',
+        'fecha_inicio_creacion', 'fecha_fin_creacion', 'descuento',
     ];
 
     protected $casts = [
@@ -20,6 +21,8 @@ class Venta extends Model
     'fecha_impresion' => 'datetime',
     'impreso' => 'boolean',
     'sincronizado' => 'boolean',
+    'fecha_inicio_creacion' => 'datetime',
+    'fecha_fin_creacion' => 'datetime',
     ];
 
     public function domicilio()

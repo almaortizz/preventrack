@@ -89,6 +89,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('dashboard', [DashboardController::class, 'index']);
 
+        Route::get('ruta-del-dia', [DashboardController::class, 'rutaDelDia']);
+
     // Aquí se irán agregando los recursos en los pasos siguientes:
     // productos, categorias, clientes, ventas, cotizaciones,
     // devoluciones, visitas, jornadas, rutas, comisiones, reportes...
