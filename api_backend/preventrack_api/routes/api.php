@@ -89,7 +89,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('dashboard', [DashboardController::class, 'index']);
 
-        Route::get('ruta-del-dia', [DashboardController::class, 'rutaDelDia']);
+    Route::get('ruta-del-dia', [DashboardController::class, 'rutaDelDia']);
+    Route::get('/dashboard-admin', [DashboardController::class, 'dashboardAdmin']);
 
     // Aquí se irán agregando los recursos en los pasos siguientes:
     // productos, categorias, clientes, ventas, cotizaciones,

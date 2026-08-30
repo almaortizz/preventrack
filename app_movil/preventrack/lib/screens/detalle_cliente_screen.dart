@@ -29,8 +29,19 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
       if (result['statusCode'] == 200) {
         final data = result['data'];
         final todas = data is List ? data : (data['data'] ?? []);
+
+        // Filtrar solo los pedidos de este cliente
+        final clienteId = widget.cliente['id'];
+        final pedidosCliente = todas.where((venta) {
+          final domicilio = venta['domicilio'];
+          if (domicilio == null) return false;
+          final cliente = domicilio['cliente'];
+          if (cliente == null) return false;
+          return cliente['id'] == clienteId;
+        }).toList();
+
         setState(() {
-          _pedidos = todas.take(5).toList();
+          _pedidos = pedidosCliente.take(5).toList();
           _isLoadingPedidos = false;
         });
       }
@@ -44,21 +55,19 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
     final cliente = widget.cliente;
     final nombre =
         cliente['nombre_negocio'] ?? cliente['nombre'] ?? 'Sin nombre';
-    final codigo = cliente['codigo'] ?? 'N/A';
-    final telefono = cliente['telefono'] ?? 'Sin telefono';
+    final folio = cliente['folio'] ?? 'N/A';
+    final telefono = cliente['telefono'];
+    final propietario = cliente['propietario'];
+    final zona = cliente['zona'];
+
+    // Dirección: viene del domicilio principal
     final domicilios = cliente['domicilios'] as List<dynamic>?;
-    String direccion = 'Sin direccion';
+    String direccion = 'Sin dirección';
+    String municipio = '';
     if (domicilios != null && domicilios.isNotEmpty) {
       final dom = domicilios[0];
-      final calle = dom['calle'] ?? '';
-      final colonia = dom['colonia'] ?? '';
-      final ciudad = dom['ciudad'] ?? '';
-      direccion = [
-        calle,
-        colonia,
-        ciudad,
-      ].where((s) => s.isNotEmpty).join(', ');
-      if (direccion.isEmpty) direccion = 'Sin direccion';
+      direccion = dom['direccion'] ?? 'Sin dirección';
+      municipio = dom['municipio'] ?? '';
     }
 
     final inicial = nombre[0].toUpperCase();
@@ -131,28 +140,30 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'NEGOCIO',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.primary,
-                                    letterSpacing: 0.5,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'NEGOCIO',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  nombre,
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.textPrimary,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    nombre,
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                             Container(
                               width: 40,
@@ -172,30 +183,86 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.secondary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'ID: #$codigo',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.secondary,
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.secondary.withValues(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'ID: #$folio',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.secondary,
+                                ),
+                              ),
                             ),
-                          ),
+                            if (zona != null && zona.toString().isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.textPrimary.withValues(
+                                    alpha: 0.06,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Zona: $zona',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textPrimary.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
+                        if (propietario != null &&
+                            propietario.toString().isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.person_outline,
+                                size: 16,
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.4,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Propietario: $propietario',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textPrimary.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
                   const SizedBox(height: 12),
 
-                  // Telefono
+                  // Teléfono
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
@@ -206,7 +273,7 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.phone_outlined,
                           color: AppColors.primary,
                           size: 20,
@@ -216,7 +283,7 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Telefono',
+                              'Teléfono',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textPrimary.withValues(
@@ -226,11 +293,20 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              telefono,
-                              style: const TextStyle(
+                              (telefono != null &&
+                                      telefono.toString().isNotEmpty)
+                                  ? telefono
+                                  : 'Sin teléfono',
+                              style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w500,
-                                color: AppColors.textPrimary,
+                                color:
+                                    (telefono != null &&
+                                        telefono.toString().isNotEmpty)
+                                    ? AppColors.textPrimary
+                                    : AppColors.textPrimary.withValues(
+                                        alpha: 0.35,
+                                      ),
                               ),
                             ),
                           ],
@@ -240,7 +316,7 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Direccion
+                  // Dirección
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
@@ -252,7 +328,7 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.location_on_outlined,
                           color: AppColors.primary,
                           size: 20,
@@ -263,7 +339,7 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Direccion Completa',
+                                'Dirección',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: AppColors.textPrimary.withValues(
@@ -280,6 +356,18 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                                   color: AppColors.textPrimary,
                                 ),
                               ),
+                              if (municipio.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  municipio,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textPrimary.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -362,7 +450,7 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
             ),
           ),
 
-          // Boton Nuevo Pedido fijo abajo
+          // Botón Nuevo Pedido fijo abajo
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
             decoration: BoxDecoration(

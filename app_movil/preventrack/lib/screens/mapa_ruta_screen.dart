@@ -44,6 +44,51 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
     setState(() => _isLoading = false);
   }
 
+  Future<void> _marcarVisitada(int paradaId, BuildContext sheetContext) async {
+    final rutaId = _ruta?['id'];
+    if (rutaId == null) return;
+
+    try {
+      final result = await _api.post('rutas/$rutaId/visitar/$paradaId');
+
+      if (!mounted) return;
+
+      if (result['statusCode'] == 200) {
+        // Cerrar el bottom sheet
+        Navigator.pop(sheetContext);
+
+        // Recargar los datos de la ruta
+        await _cargarRuta();
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Parada marcada como visitada'),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        final mensaje = result['data']?['message'] ?? 'Error al marcar visita';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(mensaje),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error de conexión'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   List<Marker> _buildMarkers() {
     final markers = <Marker>[];
 
@@ -63,6 +108,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
       final direccion = domicilio['direccion'] ?? '';
       final estado = parada['estado'] ?? 'pendiente';
       final orden = parada['orden_visita'] ?? (i + 1);
+      final paradaId = parada['id'];
 
       final esVisitada = estado == 'visitada';
       final color = esVisitada ? AppColors.success : AppColors.warning;
@@ -73,7 +119,13 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
           width: 44,
           height: 44,
           child: GestureDetector(
-            onTap: () => _mostrarInfoParada(nombre, direccion, estado, orden),
+            onTap: () => _mostrarInfoParada(
+              nombre,
+              direccion,
+              estado,
+              orden,
+              paradaId,
+            ),
             child: Container(
               decoration: BoxDecoration(
                 color: color,
@@ -137,6 +189,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
     String direccion,
     String estado,
     int orden,
+    int paradaId,
   ) {
     final esVisitada = estado == 'visitada';
 
@@ -145,7 +198,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => Container(
+      builder: (sheetContext) => Container(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -243,6 +296,33 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                 ],
               ),
             ],
+            // Botón "Marcar visitada" solo si está pendiente
+            if (!esVisitada) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton.icon(
+                  onPressed: () => _marcarVisitada(paradaId, sheetContext),
+                  icon: const Icon(Icons.check_circle_outline, size: 20),
+                  label: const Text(
+                    'Marcar visitada',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
           ],
         ),
@@ -308,116 +388,116 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
               child: CircularProgressIndicator(color: AppColors.primary),
             )
           : _ruta == null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.map_outlined,
-                    size: 64,
-                    color: AppColors.textPrimary.withValues(alpha: 0.2),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No hay ruta asignada para hoy',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: AppColors.textPrimary.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: [
-                // Info de ruta
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  color: AppColors.white,
+              ? Center(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Progreso de ruta',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '$_visitadas de $totalParadas paradas visitadas',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textPrimary.withValues(
-                                      alpha: 0.5,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            '${(progreso * 100).toInt()}%',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
+                      Icon(
+                        Icons.map_outlined,
+                        size: 64,
+                        color: AppColors.textPrimary.withValues(alpha: 0.2),
                       ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: progreso,
-                          minHeight: 8,
-                          backgroundColor: AppColors.cardBorder,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.success,
-                          ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No hay ruta asignada para hoy',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: AppColors.textPrimary.withValues(alpha: 0.5),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                    ],
+                  ),
+                )
+              : Column(
+                  children: [
+                    // Info de ruta
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      color: AppColors.white,
+                      child: Column(
                         children: [
-                          _buildLeyenda('Visitada', AppColors.success),
-                          const SizedBox(width: 20),
-                          _buildLeyenda('Pendiente', AppColors.warning),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Progreso de ruta',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$_visitadas de $totalParadas paradas visitadas',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textPrimary.withValues(
+                                          alpha: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                '${(progreso * 100).toInt()}%',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: LinearProgressIndicator(
+                              value: progreso,
+                              minHeight: 8,
+                              backgroundColor: AppColors.cardBorder,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                AppColors.success,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildLeyenda('Visitada', AppColors.success),
+                              const SizedBox(width: 20),
+                              _buildLeyenda('Pendiente', AppColors.warning),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                // Mapa
-                Expanded(
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: _getCentro(),
-                      initialZoom: 15,
                     ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.preventrack.app',
+                    // Mapa
+                    Expanded(
+                      child: FlutterMap(
+                        mapController: _mapController,
+                        options: MapOptions(
+                          initialCenter: _getCentro(),
+                          initialZoom: 15,
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'com.preventrack.app',
+                          ),
+                          PolylineLayer(polylines: _buildRutaLinea()),
+                          MarkerLayer(markers: _buildMarkers()),
+                        ],
                       ),
-                      PolylineLayer(polylines: _buildRutaLinea()),
-                      MarkerLayer(markers: _buildMarkers()),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
     );
   }
 

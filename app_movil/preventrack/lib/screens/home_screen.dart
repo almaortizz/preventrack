@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
 import 'dashboard_screen.dart';
+import 'dashboard_admin_screen.dart';
 import 'clientes_screen.dart';
 import 'pedidos_screen.dart';
 import 'entregas_screen.dart';
@@ -20,12 +21,26 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = const [
-    DashboardScreen(),
-    ClientesScreen(),
-    PedidosScreen(),
-    EntregasScreen(),
-  ];
+  bool _esAdmin(AuthProvider auth) {
+    return auth.usuario?['rol_id'] == 1;
+  }
+
+  List<Widget> _getScreens(bool admin) {
+    if (admin) {
+      return const [
+        DashboardAdminScreen(),
+        ClientesScreen(),
+        PedidosScreen(),
+        EntregasScreen(),
+      ];
+    }
+    return const [
+      DashboardScreen(),
+      ClientesScreen(),
+      PedidosScreen(),
+      EntregasScreen(),
+    ];
+  }
 
   final List<String> _titles = const [
     'Preventrack',
@@ -39,6 +54,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final auth = Provider.of<AuthProvider>(context);
     final nombre = auth.usuario?['nombre'] ?? 'U';
     final inicial = nombre[0].toUpperCase();
+    final admin = _esAdmin(auth);
+    final screens = _getScreens(admin);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -132,12 +149,37 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      auth.usuario?['usuario'] ?? '',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textPrimary.withValues(alpha: 0.5),
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          auth.usuario?['usuario'] ?? '',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textPrimary.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        if (admin) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'ADMIN',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -158,20 +200,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
-              ListTile(
-                leading: const Icon(
-                  Icons.access_time,
-                  color: AppColors.primary,
+              // Jornada laboral solo para colaboradores
+              if (!admin)
+                ListTile(
+                  leading: const Icon(
+                    Icons.access_time,
+                    color: AppColors.primary,
+                  ),
+                  title: const Text('Jornada laboral'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const JornadaScreen()),
+                    );
+                  },
                 ),
-                title: const Text('Jornada laboral'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const JornadaScreen()),
-                  );
-                },
-              ),
               ListTile(
                 leading: const Icon(
                   Icons.map_outlined,
@@ -198,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               const Spacer(),
-              // Cerrar sesion
+              // Cerrar sesión
               Container(
                 decoration: BoxDecoration(
                   border: Border(
@@ -210,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ListTile(
                   leading: const Icon(Icons.logout, color: AppColors.error),
                   title: const Text(
-                    'Cerrar sesion',
+                    'Cerrar sesión',
                     style: TextStyle(color: AppColors.error),
                   ),
                   onTap: () async {
@@ -231,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      body: _screens[_selectedIndex],
+      body: screens[_selectedIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {
