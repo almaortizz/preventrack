@@ -9,7 +9,7 @@ import Clientes from './pages/Clientes'
 import Categorias from './pages/Categorias'
 import Productos from './pages/Productos'
 import Preventistas from './pages/Preventistas'
-
+import Ventas from './pages/Ventas'
 
 export default function App() {
   return (
@@ -36,7 +36,7 @@ export default function App() {
           element={<Categorias />}
           />
 
-          <Route path="ventas" element={<Placeholder title="Ventas" />} />
+          <Route path="ventas" element={<Ventas />} />
           <Route
             path="cotizaciones"
             element={<Placeholder title="Cotizaciones" />}
