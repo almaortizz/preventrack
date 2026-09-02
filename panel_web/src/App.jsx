@@ -10,6 +10,7 @@ import Categorias from './pages/Categorias'
 import Productos from './pages/Productos'
 import Preventistas from './pages/Preventistas'
 import Ventas from './pages/Ventas'
+import Reportes from './pages/Reportes'
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="clientes" element={<Clientes />} />
           <Route path="preventistas" element={<Preventistas />} />
+          <Route path="reportes" element={<Reportes />} />
           <Route
             path="productos"
             element={<Productos />}

@@ -7,7 +7,6 @@ const links = [
   { to: '/productos', label: 'Productos' },
   { to: '/categorias', label: 'Categorías' },
   { to: '/ventas', label: 'Ventas' },
-  { to: '/cotizaciones', label: 'Cotizaciones' },
   { to: '/rutas', label: 'Rutas' },
   { to: '/visitas', label: 'Visitas' },
   { to: '/reportes', label: 'Reportes' },
