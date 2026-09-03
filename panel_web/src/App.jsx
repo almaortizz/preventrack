@@ -11,6 +11,7 @@ import Productos from './pages/Productos'
 import Preventistas from './pages/Preventistas'
 import Ventas from './pages/Ventas'
 import Reportes from './pages/Reportes'
+import Rutas from './pages/Rutas'
 
 export default function App() {
   return (
@@ -43,7 +44,7 @@ export default function App() {
             path="cotizaciones"
             element={<Placeholder title="Cotizaciones" />}
           />
-          <Route path="rutas" element={<Placeholder title="Rutas" />} />
+         <Route path="rutas" element={<Rutas />} />
           <Route path="visitas" element={<Placeholder title="Visitas" />} />
           <Route
             path="reportes"
