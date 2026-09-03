@@ -57,11 +57,11 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
     String clienteNombre = 'Cliente';
     String clienteDireccion = '';
     if (domicilio != null) {
-      clienteNombre = domicilio['referencia'] ?? 'Cliente';
-      final calle = domicilio['calle'] ?? '';
-      final colonia = domicilio['colonia'] ?? '';
-      final ciudad = domicilio['ciudad'] ?? '';
-      clienteDireccion = [calle, colonia, ciudad].where((s) => s.toString().isNotEmpty).join(', ');
+      clienteDireccion = domicilio['direccion'] ?? '';
+      final cliente = domicilio['cliente'];
+      if (cliente != null) {
+        clienteNombre = cliente['nombre_negocio'] ?? 'Cliente';
+      }
     }
 
     // Estados para timeline
@@ -92,14 +92,20 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
         estadoLabel = estado;
     }
 
-    final numeroCorto = numero.length > 15 ? 'ORDEN #${numero.substring(4, 14)}' : 'ORDEN #$numero';
+    final numeroCorto = numero.length > 15
+        ? 'ORDEN #${numero.substring(4, 14)}'
+        : 'ORDEN #$numero';
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
           'Detalle de Pedido',
-          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 18),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: AppColors.primary,
+            fontSize: 18,
+          ),
         ),
         backgroundColor: AppColors.white,
         foregroundColor: AppColors.primary,
@@ -112,11 +118,16 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: AppColors.cardBorder.withValues(alpha: 0.5), height: 1),
+          child: Container(
+            color: AppColors.cardBorder.withValues(alpha: 0.5),
+            height: 1,
+          ),
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
           : Column(
               children: [
                 Expanded(
@@ -137,35 +148,58 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                           child: Column(
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         numeroCorto,
-                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary,
+                                        ),
                                       ),
                                       if (fechaStr.isNotEmpty)
                                         Padding(
-                                          padding: const EdgeInsets.only(top: 2),
+                                          padding: const EdgeInsets.only(
+                                            top: 2,
+                                          ),
                                           child: Text(
                                             fechaStr,
-                                            style: TextStyle(fontSize: 12, color: AppColors.textPrimary.withValues(alpha: 0.45)),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: AppColors.textPrimary
+                                                  .withValues(alpha: 0.45),
+                                            ),
                                           ),
                                         ),
                                     ],
                                   ),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 4,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: estadoColor.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: estadoColor.withValues(alpha: 0.3)),
+                                      border: Border.all(
+                                        color: estadoColor.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                      ),
                                     ),
                                     child: Text(
                                       estadoLabel,
-                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: estadoColor),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: estadoColor,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -183,7 +217,11 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                         // Info cliente
                         const Text(
                           'Informacion del Cliente',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         Container(
@@ -200,10 +238,16 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                                 width: 40,
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.08),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.08,
+                                  ),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: const Icon(Icons.store, color: AppColors.primary, size: 20),
+                                child: const Icon(
+                                  Icons.store,
+                                  color: AppColors.primary,
+                                  size: 20,
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -212,14 +256,22 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                                   children: [
                                     Text(
                                       clienteNombre,
-                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary,
+                                      ),
                                     ),
                                     if (clienteDireccion.isNotEmpty)
                                       Padding(
                                         padding: const EdgeInsets.only(top: 2),
                                         child: Text(
                                           clienteDireccion,
-                                          style: TextStyle(fontSize: 12, color: AppColors.textPrimary.withValues(alpha: 0.5)),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.textPrimary
+                                                .withValues(alpha: 0.5),
+                                          ),
                                         ),
                                       ),
                                   ],
@@ -233,7 +285,11 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                         // Articulos
                         const Text(
                           'Articulos del Pedido',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                         const SizedBox(height: 10),
 
@@ -249,7 +305,11 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                             child: Text(
                               'Sin detalle de productos',
                               textAlign: TextAlign.center,
-                              style: TextStyle(color: AppColors.textPrimary.withValues(alpha: 0.45)),
+                              style: TextStyle(
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.45,
+                                ),
+                              ),
                             ),
                           )
                         else
@@ -268,20 +328,55 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                           child: Column(
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('Subtotal', style: TextStyle(fontSize: 14, color: AppColors.textPrimary.withValues(alpha: 0.6))),
-                                  Text('\$$total', style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+                                  Text(
+                                    'Subtotal',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textPrimary.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '\$$total',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 10),
-                              Container(height: 1, color: AppColors.cardBorder.withValues(alpha: 0.5)),
+                              Container(
+                                height: 1,
+                                color: AppColors.cardBorder.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
                               const SizedBox(height: 10),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('Total', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                                  Text('\$$total', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                                  const Text(
+                                    'Total',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  Text(
+                                    '\$$total',
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -299,7 +394,11 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                     decoration: BoxDecoration(
                       color: AppColors.white,
-                      border: Border(top: BorderSide(color: AppColors.cardBorder.withValues(alpha: 0.5))),
+                      border: Border(
+                        top: BorderSide(
+                          color: AppColors.cardBorder.withValues(alpha: 0.5),
+                        ),
+                      ),
                     ),
                     child: SizedBox(
                       width: double.infinity,
@@ -307,7 +406,11 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                       child: ElevatedButton.icon(
                         onPressed: () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Funcion de impresion Bluetooth proximamente')),
+                            const SnackBar(
+                              content: Text(
+                                'Funcion de impresion Bluetooth proximamente',
+                              ),
+                            ),
                           );
                         },
                         icon: const Icon(Icons.print_outlined, size: 20),
@@ -337,25 +440,35 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                     Expanded(
                       child: Container(
                         height: 3,
-                        color: isActive ? AppColors.primary : AppColors.cardBorder,
+                        color: isActive
+                            ? AppColors.primary
+                            : AppColors.cardBorder,
                       ),
                     ),
                   Container(
                     width: isCurrent ? 28 : 22,
                     height: isCurrent ? 28 : 22,
                     decoration: BoxDecoration(
-                      color: isActive ? AppColors.primary : AppColors.cardBorder,
+                      color: isActive
+                          ? AppColors.primary
+                          : AppColors.cardBorder,
                       shape: BoxShape.circle,
                     ),
                     child: isActive
-                        ? Icon(Icons.check, color: AppColors.white, size: isCurrent ? 16 : 12)
+                        ? Icon(
+                            Icons.check,
+                            color: AppColors.white,
+                            size: isCurrent ? 16 : 12,
+                          )
                         : null,
                   ),
                   if (index < 2)
                     Expanded(
                       child: Container(
                         height: 3,
-                        color: index < estadoActual ? AppColors.primary : AppColors.cardBorder,
+                        color: index < estadoActual
+                            ? AppColors.primary
+                            : AppColors.cardBorder,
                       ),
                     ),
                 ],
@@ -366,7 +479,9 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
-                  color: isActive ? AppColors.primary : AppColors.textPrimary.withValues(alpha: 0.4),
+                  color: isActive
+                      ? AppColors.primary
+                      : AppColors.textPrimary.withValues(alpha: 0.4),
                 ),
               ),
             ],
@@ -378,7 +493,9 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
 
   Widget _buildArticuloCard(Map<String, dynamic> item) {
     final producto = item['producto'];
-    final nombre = producto != null ? (producto['nombre'] ?? 'Producto') : 'Producto';
+    final nombre = producto != null
+        ? (producto['nombre'] ?? 'Producto')
+        : 'Producto';
     final cantidad = item['cantidad'] ?? 0;
     final subtotal = item['subtotal'] ?? '0';
 
@@ -399,7 +516,11 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
               color: AppColors.background,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.inventory_2_outlined, color: AppColors.textPrimary.withValues(alpha: 0.25), size: 20),
+            child: Icon(
+              Icons.inventory_2_outlined,
+              color: AppColors.textPrimary.withValues(alpha: 0.25),
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -408,19 +529,30 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
               children: [
                 Text(
                   nombre,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   '$cantidad Unidades',
-                  style: TextStyle(fontSize: 12, color: AppColors.textPrimary.withValues(alpha: 0.45)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textPrimary.withValues(alpha: 0.45),
+                  ),
                 ),
               ],
             ),
           ),
           Text(
             '\$$subtotal',
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
           ),
         ],
       ),
@@ -428,7 +560,21 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
   }
 
   String _nombreMes(int mes) {
-    const meses = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const meses = [
+      '',
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
     return meses[mes];
   }
 }

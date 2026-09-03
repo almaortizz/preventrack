@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import 'detalle_cliente_screen.dart';
+import 'crear_cliente_screen.dart';
 
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({super.key});
@@ -66,7 +67,9 @@ class _ClientesScreenState extends State<ClientesScreen> {
         String direccion = '';
         final domicilios = c['domicilios'] as List<dynamic>?;
         if (domicilios != null && domicilios.isNotEmpty) {
-          direccion = (domicilios[0]['direccion'] ?? '').toString().toLowerCase();
+          direccion = (domicilios[0]['direccion'] ?? '')
+              .toString()
+              .toLowerCase();
         }
 
         return nombre.contains(query) ||
@@ -198,18 +201,18 @@ class _ClientesScreenState extends State<ClientesScreen> {
                       ),
                     )
                   : clientesFiltrados.isEmpty
-                      ? _buildEmptyState()
-                      : RefreshIndicator(
-                          onRefresh: _cargarClientes,
-                          color: AppColors.primary,
-                          child: ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-                            itemCount: clientesFiltrados.length,
-                            itemBuilder: (context, index) {
-                              return _buildClienteCard(clientesFiltrados[index]);
-                            },
-                          ),
-                        ),
+                  ? _buildEmptyState()
+                  : RefreshIndicator(
+                      onRefresh: _cargarClientes,
+                      color: AppColors.primary,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+                        itemCount: clientesFiltrados.length,
+                        itemBuilder: (context, index) {
+                          return _buildClienteCard(clientesFiltrados[index]);
+                        },
+                      ),
+                    ),
             ),
           ],
         ),
@@ -219,14 +222,14 @@ class _ClientesScreenState extends State<ClientesScreen> {
           bottom: 16,
           right: 16,
           child: FloatingActionButton(
-            onPressed: () {
-              // TODO: Navegar a pantalla de crear cliente
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Crear cliente — próximamente'),
-                  duration: Duration(seconds: 2),
-                ),
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CrearClienteScreen()),
               );
+              if (result == true) {
+                _cargarClientes(); // Recarga la lista al volver
+              }
             },
             backgroundColor: AppColors.primary,
             child: const Icon(Icons.person_add, color: AppColors.white),
@@ -281,8 +284,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
     if (palabras.length >= 2) {
       iniciales = '${palabras[0][0]}${palabras[1][0]}'.toUpperCase();
     } else {
-      iniciales =
-          nombre.substring(0, nombre.length >= 2 ? 2 : 1).toUpperCase();
+      iniciales = nombre.substring(0, nombre.length >= 2 ? 2 : 1).toUpperCase();
     }
 
     final colors = [
