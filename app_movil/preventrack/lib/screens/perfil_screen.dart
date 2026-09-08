@@ -140,7 +140,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
     final usuario = auth.usuario ?? {};
     final nombre = usuario['nombre'] ?? 'Usuario';
     final apellidos = usuario['apellidos'] ?? '';
-    final telefono = usuario['telefono'] ?? 'Sin telefono';
+    final telefono = usuario['telefono'] ?? 'Sin teléfono';
     final user = usuario['usuario'] ?? '';
     final rol = usuario['rol'];
     final rolNombre = rol != null
@@ -386,7 +386,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Version app v1.0.0',
+                    'Versión app v1.0.0',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.textPrimary.withValues(alpha: 0.4),
@@ -405,7 +405,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Cerrar sesion
+            // Cerrar Sesión
             Center(
               child: OutlinedButton(
                 onPressed: () async {

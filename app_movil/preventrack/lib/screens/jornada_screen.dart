@@ -125,7 +125,7 @@ class _JornadaScreenState extends State<JornadaScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Error de conexion')));
+        ).showSnackBar(const SnackBar(content: Text('Error de conexión')));
       }
     }
     setState(() => _isProcessing = false);
@@ -151,7 +151,7 @@ class _JornadaScreenState extends State<JornadaScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Error de conexion')));
+        ).showSnackBar(const SnackBar(content: Text('Error de conexión')));
       }
     }
     setState(() => _isProcessing = false);
@@ -177,7 +177,7 @@ class _JornadaScreenState extends State<JornadaScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Error de conexion')));
+        ).showSnackBar(const SnackBar(content: Text('Error de conexión')));
       }
     }
     setState(() => _isProcessing = false);
@@ -210,7 +210,7 @@ class _JornadaScreenState extends State<JornadaScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Error de conexion')));
+        ).showSnackBar(const SnackBar(content: Text('Error de conexión')));
       }
     }
     setState(() => _isProcessing = false);
@@ -455,7 +455,7 @@ class _JornadaScreenState extends State<JornadaScreen> {
                             ? null
                             : () => _confirmarAccion(
                                 'Finalizar Jornada',
-                                'Estas seguro de finalizar tu jornada laboral?',
+                                '¿Estás seguro de finalizar tu jornada laboral?',
                                 _finalizarJornada,
                               ),
                         icon: const Icon(Icons.logout, size: 18),

@@ -59,7 +59,7 @@ class ConfirmacionPedidoScreen extends StatelessWidget {
 
                     // Titulo
                     const Text(
-                      'Pedido registrado!',
+                      '¡Pedido registrado!',
                       style: TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.bold,
@@ -78,7 +78,7 @@ class ConfirmacionPedidoScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 28),
 
-                    // Card numero de orden
+                    // Card NÚMERO DE ORDEN
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
@@ -93,7 +93,7 @@ class ConfirmacionPedidoScreen extends StatelessWidget {
                       child: Column(
                         children: [
                           Text(
-                            'NUMERO DE ORDEN',
+                            'NÚMERO DE ORDEN',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -199,7 +199,7 @@ class ConfirmacionPedidoScreen extends StatelessWidget {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
-                                'Funcion de impresion Bluetooth proximamente',
+                                'Función de impresión Bluetooth próximamente',
                               ),
                             ),
                           );

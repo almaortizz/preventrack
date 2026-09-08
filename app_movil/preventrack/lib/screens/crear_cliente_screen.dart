@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
-import 'seleccionar_ubicacion_screen.dart';
 
 class CrearClienteScreen extends StatefulWidget {
   const CrearClienteScreen({super.key});
@@ -24,13 +25,24 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
   final _direccionController = TextEditingController();
   final _municipioController = TextEditingController();
 
+  // GPS
   double? _latitud;
   double? _longitud;
+  bool _capturandoGps = false;
+  String? _gpsError;
+
+  // Nominatim
   List<dynamic> _sugerencias = [];
   bool _buscandoDireccion = false;
-  bool _direccionSeleccionada = false;
   Timer? _debounce;
+
   bool _guardando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _capturarUbicacion();
+  }
 
   @override
   void dispose() {
@@ -42,6 +54,71 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
     _municipioController.dispose();
     _debounce?.cancel();
     super.dispose();
+  }
+
+  Future<void> _capturarUbicacion() async {
+    // En web no capturamos GPS
+    if (kIsWeb) return;
+
+    setState(() {
+      _capturandoGps = true;
+      _gpsError = null;
+    });
+
+    try {
+      // Verificar si el servicio de ubicación está habilitado
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _gpsError = 'Activa el GPS de tu dispositivo';
+          _capturandoGps = false;
+        });
+        return;
+      }
+
+      // Verificar permisos
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _gpsError = 'Permiso de ubicación denegado';
+            _capturandoGps = false;
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _gpsError = 'Permiso de ubicación denegado permanentemente. Actívalo en Ajustes.';
+          _capturandoGps = false;
+        });
+        return;
+      }
+
+      // Obtener ubicación
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _latitud = position.latitude;
+        _longitud = position.longitude;
+        _capturandoGps = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _gpsError = 'No se pudo obtener la ubicación';
+        _capturandoGps = false;
+      });
+    }
   }
 
   void _buscarDireccion(String query) {
@@ -96,8 +173,6 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
 
   void _seleccionarDireccion(Map<String, dynamic> lugar) {
     final displayName = lugar['display_name'] ?? '';
-    final lat = double.tryParse(lugar['lat']?.toString() ?? '');
-    final lon = double.tryParse(lugar['lon']?.toString() ?? '');
     final address = lugar['address'] as Map<String, dynamic>? ?? {};
 
     final municipio = address['city'] ??
@@ -110,41 +185,8 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
     setState(() {
       _direccionController.text = displayName;
       _municipioController.text = municipio;
-      _latitud = lat;
-      _longitud = lon;
       _sugerencias = [];
-      _direccionSeleccionada = true;
     });
-  }
-
-  Future<void> _abrirMapa() async {
-    final result = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SeleccionarUbicacionScreen(
-          latitudInicial: _latitud,
-          longitudInicial: _longitud,
-        ),
-      ),
-    );
-
-    if (result != null && mounted) {
-      setState(() {
-        _latitud = result['latitud'];
-        _longitud = result['longitud'];
-        _direccionSeleccionada = true;
-
-        // Si el geocoding inverso devolvió datos, llenar los campos
-        if (result['direccion'] != null &&
-            _direccionController.text.trim().isEmpty) {
-          _direccionController.text = result['direccion'];
-        }
-        if (result['municipio'] != null &&
-            _municipioController.text.trim().isEmpty) {
-          _municipioController.text = result['municipio'];
-        }
-      });
-    }
   }
 
   Future<void> _guardarCliente() async {
@@ -186,7 +228,8 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
             domicilioBody['longitud'] = _longitud;
           }
 
-          await _api.post('clientes/$clienteId/domicilios', body: domicilioBody);
+          await _api.post('clientes/$clienteId/domicilios',
+              body: domicilioBody);
         }
 
         if (!mounted) return;
@@ -205,9 +248,8 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
 
         if (errores is Map && errores.containsKey('errors')) {
           final errors = errores['errors'] as Map<String, dynamic>;
-          mensaje = errors.values
-              .expand((e) => e is List ? e : [e])
-              .join('\n');
+          mensaje =
+              errors.values.expand((e) => e is List ? e : [e]).join('\n');
         } else if (errores is Map && errores.containsKey('message')) {
           mensaje = errores['message'];
         }
@@ -270,6 +312,11 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ── GPS automático ──
+                    _buildGpsIndicator(),
+                    const SizedBox(height: 16),
+
+                    // ── Información del negocio ──
                     const Text(
                       'INFORMACIÓN DEL NEGOCIO',
                       style: TextStyle(
@@ -328,6 +375,7 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                     ),
                     const SizedBox(height: 20),
 
+                    // ── Domicilio ──
                     const Text(
                       'DOMICILIO',
                       style: TextStyle(
@@ -347,7 +395,7 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                       ),
                       child: Column(
                         children: [
-                          // Campo de dirección con búsqueda
+                          // Campo de dirección con búsqueda Nominatim
                           TextFormField(
                             controller: _direccionController,
                             validator: (v) {
@@ -357,17 +405,15 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                               return null;
                             },
                             onChanged: (value) {
-                              _direccionSeleccionada = false;
-                              _latitud = null;
-                              _longitud = null;
                               _buscarDireccion(value);
                             },
                             decoration: InputDecoration(
                               labelText: 'Dirección *',
-                              hintText: 'Escribe para buscar...',
+                              hintText: 'Escribe la dirección...',
                               hintStyle: TextStyle(
                                 fontSize: 14,
-                                color: AppColors.textPrimary.withValues(alpha: 0.3),
+                                color: AppColors.textPrimary
+                                    .withValues(alpha: 0.3),
                               ),
                               prefixIcon: const Icon(
                                 Icons.location_on_outlined,
@@ -386,13 +432,7 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                                         ),
                                       ),
                                     )
-                                  : _direccionSeleccionada
-                                      ? const Icon(
-                                          Icons.check_circle,
-                                          color: AppColors.success,
-                                          size: 20,
-                                        )
-                                      : null,
+                                  : null,
                               filled: true,
                               fillColor: AppColors.background,
                               border: OutlineInputBorder(
@@ -434,10 +474,12 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                               decoration: BoxDecoration(
                                 color: AppColors.white,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppColors.cardBorder),
+                                border:
+                                    Border.all(color: AppColors.cardBorder),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.06),
+                                    color:
+                                        Colors.black.withValues(alpha: 0.06),
                                     blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
@@ -447,10 +489,11 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                                 borderRadius: BorderRadius.circular(10),
                                 child: Column(
                                   children: _sugerencias.map((lugar) {
-                                    final nombre = lugar['display_name'] ?? '';
-                                    final tipo = lugar['type'] ?? '';
+                                    final nombre =
+                                        lugar['display_name'] ?? '';
                                     return InkWell(
-                                      onTap: () => _seleccionarDireccion(lugar),
+                                      onTap: () =>
+                                          _seleccionarDireccion(lugar),
                                       child: Container(
                                         width: double.infinity,
                                         padding: const EdgeInsets.symmetric(
@@ -479,10 +522,12 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                                                 nombre,
                                                 style: const TextStyle(
                                                   fontSize: 13,
-                                                  color: AppColors.textPrimary,
+                                                  color:
+                                                      AppColors.textPrimary,
                                                 ),
                                                 maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
                                               ),
                                             ),
                                           ],
@@ -494,67 +539,11 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                               ),
                             ),
 
-                          const SizedBox(height: 10),
-
-                          // Botón "Ubicar en mapa"
-                          SizedBox(
-                            width: double.infinity,
-                            height: 42,
-                            child: OutlinedButton.icon(
-                              onPressed: _abrirMapa,
-                              icon: const Icon(Icons.map_outlined, size: 18),
-                              label: Text(
-                                _latitud != null
-                                    ? 'Cambiar ubicación en mapa'
-                                    : 'Ubicar en mapa',
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.primary,
-                                side: const BorderSide(color: AppColors.primary),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // Indicador de coordenadas
-                          if (_latitud != null && _longitud != null)
-                            Container(
-                              margin: const EdgeInsets.only(top: 8),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.success.withValues(alpha: 0.06),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.gps_fixed,
-                                    size: 14,
-                                    color: AppColors.success,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Coordenadas: ${_latitud!.toStringAsFixed(4)}, ${_longitud!.toStringAsFixed(4)}',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.success,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
                           const SizedBox(height: 14),
                           _buildCampo(
                             controller: _municipioController,
                             label: 'Municipio',
-                            hint: 'Se llena automáticamente',
+                            hint: 'Escribe el municipio',
                             icono: Icons.location_city_outlined,
                           ),
                         ],
@@ -567,6 +556,7 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
             ),
           ),
 
+          // Botón Guardar
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             decoration: BoxDecoration(
@@ -615,6 +605,92 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
     );
   }
 
+  Widget _buildGpsIndicator() {
+    if (kIsWeb) return const SizedBox.shrink();
+
+    Color bgColor;
+    Color iconColor;
+    IconData icono;
+    String texto;
+
+    if (_capturandoGps) {
+      bgColor = AppColors.secondary.withValues(alpha: 0.06);
+      iconColor = AppColors.secondary;
+      icono = Icons.gps_not_fixed;
+      texto = 'Capturando ubicación GPS...';
+    } else if (_gpsError != null) {
+      bgColor = AppColors.warning.withValues(alpha: 0.06);
+      iconColor = AppColors.warning;
+      icono = Icons.gps_off;
+      texto = _gpsError!;
+    } else if (_latitud != null) {
+      bgColor = AppColors.success.withValues(alpha: 0.06);
+      iconColor = AppColors.success;
+      icono = Icons.gps_fixed;
+      texto =
+          'Ubicación capturada: ${_latitud!.toStringAsFixed(4)}, ${_longitud!.toStringAsFixed(4)}';
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: iconColor.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          _capturandoGps
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: iconColor,
+                  ),
+                )
+              : Icon(icono, color: iconColor, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              texto,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: iconColor,
+              ),
+            ),
+          ),
+          if (_gpsError != null)
+            GestureDetector(
+              onTap: _capturarUbicacion,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Reintentar',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: iconColor,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCampo({
     required TextEditingController controller,
     required String label,
@@ -643,7 +719,8 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide:
+              const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -651,7 +728,8 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+          borderSide:
+              const BorderSide(color: AppColors.error, width: 1.5),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
