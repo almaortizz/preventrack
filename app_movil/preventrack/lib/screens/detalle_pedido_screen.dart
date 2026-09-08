@@ -216,7 +216,7 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
 
                         // Info cliente
                         const Text(
-                          'Informacion del Cliente',
+                          'Información del Cliente',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
