@@ -4,6 +4,7 @@ import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import 'confirmacion_pedido_screen.dart';
+import '../services/database_service.dart';
 
 class ResumenPedidoScreen extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -143,10 +144,64 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
         }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexion. Intenta de nuevo.')),
+      // Sin conexión: guardar pedido offline
+      if (DatabaseService.isAvailable) {
+        final domicilios = widget.cliente['domicilios'] as List<dynamic>?;
+        int? domicilioId;
+        if (domicilios != null && domicilios.isNotEmpty) {
+          domicilioId = domicilios[0]['id'];
+        }
+
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        final usuarioId = auth.usuario?['id'];
+
+        final productos = _carrito.values.map((item) {
+          return {
+            'producto_id': item['producto']['id'],
+            'cantidad': item['cantidad'],
+            'precio_unitario': item['producto']['precio_venta'],
+          };
+        }).toList();
+
+        final body = {
+          'domicilio_id': domicilioId,
+          'preventista_vendedor_id': usuarioId,
+          'productos': productos,
+          'notas': _notasController.text.isNotEmpty
+              ? _notasController.text
+              : null,
+          'fecha_inicio_creacion': widget.horaInicio.toIso8601String(),
+          'fecha_fin_creacion': DateTime.now().toIso8601String(),
+          'descuento': _descuento,
+        };
+
+        await DatabaseService.guardarOperacionPendiente(
+          tipo: 'crear_pedido',
+          endpoint: 'ventas',
+          metodo: 'POST',
+          body: body,
         );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Pedido guardado offline. Se enviará cuando haya conexión.',
+              ),
+              backgroundColor: AppColors.warning,
+              duration: Duration(seconds: 3),
+            ),
+          );
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Error de conexión. Intenta de nuevo.'),
+            ),
+          );
+        }
       }
     }
 

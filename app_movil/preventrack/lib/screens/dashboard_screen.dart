@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/database_service.dart';
+import '../services/sync_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -16,11 +18,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final ApiService _api = ApiService();
   Map<String, dynamic>? _dashboardData;
   bool _isLoading = true;
+  int _pendientesSync = 0;
+  String? _syncMensaje;
 
   @override
   void initState() {
     super.initState();
     _cargarDashboard();
+    _sincronizarPendientes();
   }
 
   Future<void> _cargarDashboard() async {
@@ -35,6 +40,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } catch (e) {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _sincronizarPendientes() async {
+    if (!DatabaseService.isAvailable) return;
+
+    final pendientes = await DatabaseService.contarOperacionesPendientes();
+    if (pendientes == 0) return;
+
+    setState(() => _pendientesSync = pendientes);
+
+    // Intentar sincronizar
+    final resultado = await SyncService.subirPendientes();
+
+    if (!mounted) return;
+
+    if (resultado['subidas'] > 0) {
+      setState(() {
+        _syncMensaje =
+            '${resultado['subidas']} pedido${resultado['subidas'] == 1 ? '' : 's'} sincronizado${resultado['subidas'] == 1 ? '' : 's'} correctamente';
+        _pendientesSync = 0;
+      });
+      // Recargar dashboard con datos actualizados
+      _cargarDashboard();
+      // Ocultar mensaje después de 4 segundos
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _syncMensaje = null);
+      });
+    } else if (resultado['fallidas'] > 0) {
+      setState(() {
+        _pendientesSync = resultado['fallidas'];
+      });
     }
   }
 
@@ -91,6 +128,77 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
+                // Banner de sincronización
+                if (_syncMensaje != null)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.success.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.cloud_done,
+                          size: 18,
+                          color: AppColors.success,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _syncMensaje!,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.success,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (_pendientesSync > 0 && _syncMensaje == null)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.warning.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.cloud_upload_outlined,
+                          size: 18,
+                          color: AppColors.warning,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '$_pendientesSync pedido${_pendientesSync == 1 ? '' : 's'} pendiente${_pendientesSync == 1 ? '' : 's'} de sincronizar',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.warning,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Row(
                   children: [
                     Expanded(
@@ -544,9 +652,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final numero = pedido['numero_orden'] ?? '';
     final domicilio = pedido['domicilio'];
     final vendedor = pedido['vendedor'];
-    final clienteNombre = domicilio != null
-        ? (domicilio['referencia'] ?? 'Cliente')
-        : (vendedor != null ? vendedor['nombre'] ?? 'Cliente' : 'Cliente');
+    String clienteNombre = 'Cliente';
+    if (domicilio != null) {
+      final cliente = domicilio['cliente'];
+      if (cliente != null) {
+        clienteNombre = cliente['nombre_negocio'] ?? 'Cliente';
+      }
+    }
 
     Color estadoColor;
     String estadoLabel;
