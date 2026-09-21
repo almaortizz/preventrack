@@ -9,7 +9,6 @@ import 'pedidos_screen.dart';
 import 'entregas_screen.dart';
 import 'jornada_screen.dart';
 import 'perfil_screen.dart';
-import 'mapa_ruta_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -216,20 +215,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                 ),
-              ListTile(
-                leading: const Icon(
-                  Icons.map_outlined,
-                  color: AppColors.primary,
-                ),
-                title: const Text('Mapa de ruta'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MapaRutaScreen()),
-                  );
-                },
-              ),
               ListTile(
                 leading: const Icon(
                   Icons.description_outlined,

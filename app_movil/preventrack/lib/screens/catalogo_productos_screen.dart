@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import 'resumen_pedido_screen.dart';
+import '../services/database_service.dart';
 
 class CatalogoProductosScreen extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -21,6 +22,7 @@ class _CatalogoProductosScreenState extends State<CatalogoProductosScreen> {
   bool _isLoading = true;
   String _categoriaSeleccionada = 'Todo';
   late DateTime _horaInicio;
+  bool _modoOffline = false;
 
   final Map<int, Map<String, dynamic>> _carrito = {};
 
@@ -46,12 +48,26 @@ class _CatalogoProductosScreenState extends State<CatalogoProductosScreen> {
       if (resultP['statusCode'] == 200) {
         final data = resultP['data'];
         _productos = data is List ? data : (data['data'] ?? []);
+        if (DatabaseService.isAvailable) {
+          await DatabaseService.guardarProductos(_productos);
+        }
       }
       if (resultC['statusCode'] == 200) {
         final data = resultC['data'];
         _categorias = data is List ? data : (data['data'] ?? []);
+        if (DatabaseService.isAvailable) {
+          await DatabaseService.guardarCategorias(_categorias);
+        }
       }
-    } catch (e) {}
+      _modoOffline = false;
+    } catch (e) {
+      // Sin conexión, cargar desde SQLite
+      if (DatabaseService.isAvailable) {
+        _productos = await DatabaseService.obtenerProductos();
+        _categorias = await DatabaseService.obtenerCategorias();
+        _modoOffline = _productos.isNotEmpty;
+      }
+    }
     setState(() => _isLoading = false);
   }
 
