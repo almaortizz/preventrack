@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import 'detalle_entrega_screen.dart';
+import 'mapa_entregas_screen.dart';
 
 class EntregasScreen extends StatefulWidget {
   const EntregasScreen({super.key});
@@ -80,6 +81,46 @@ class _EntregasScreenState extends State<EntregasScreen> {
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: AppColors.secondary,
+                        ),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  MapaEntregasScreen(entregas: _entregas),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.secondary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.map_outlined,
+                                size: 14,
+                                color: AppColors.secondary,
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Ver mapa',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.secondary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],

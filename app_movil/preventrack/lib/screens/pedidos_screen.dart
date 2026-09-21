@@ -4,6 +4,7 @@ import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import 'detalle_pedido_screen.dart';
 import 'catalogo_productos_screen.dart';
+import '../services/database_service.dart';
 
 class PedidosScreen extends StatefulWidget {
   const PedidosScreen({super.key});
@@ -17,6 +18,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
   List<dynamic> _pedidos = [];
   bool _isLoading = true;
   String _filtroActual = 'Todos';
+  bool _modoOffline = false;
 
   final List<String> _filtros = [
     'Todos',
@@ -40,12 +42,18 @@ class _PedidosScreenState extends State<PedidosScreen> {
         final data = result['data'];
         setState(() {
           _pedidos = data is List ? data : (data['data'] ?? []);
+          _modoOffline = false;
           _isLoading = false;
         });
+        return;
       }
     } catch (e) {
-      setState(() => _isLoading = false);
+      // Sin conexión
     }
+    setState(() {
+      _modoOffline = true;
+      _isLoading = false;
+    });
   }
 
   List<dynamic> get _pedidosFiltrados {

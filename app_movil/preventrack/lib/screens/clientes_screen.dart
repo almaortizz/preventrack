@@ -3,6 +3,8 @@ import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import 'detalle_cliente_screen.dart';
 import 'crear_cliente_screen.dart';
+import 'mapa_ruta_screen.dart';
+import '../services/database_service.dart';
 
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({super.key});
@@ -18,6 +20,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
   bool _isLoading = true;
   String _filtroActual = 'Todos';
   String _busqueda = '';
+  bool _modoOffline = false;
 
   @override
   void initState() {
@@ -37,12 +40,31 @@ class _ClientesScreenState extends State<ClientesScreen> {
       final result = await _api.get('clientes');
       if (result['statusCode'] == 200) {
         final data = result['data'];
+        final clientes = data is List ? data : (data['data'] ?? []);
         setState(() {
-          _clientes = data is List ? data : (data['data'] ?? []);
+          _clientes = clientes;
+          _modoOffline = false;
           _isLoading = false;
         });
+        // Guardar en caché local
+        if (DatabaseService.isAvailable) {
+          await DatabaseService.guardarClientes(clientes);
+        }
+        return;
       }
     } catch (e) {
+      // Sin conexión, intentar caché local
+    }
+
+    // Fallback: cargar desde SQLite
+    if (DatabaseService.isAvailable) {
+      final clientesLocal = await DatabaseService.obtenerClientes();
+      setState(() {
+        _clientes = clientesLocal;
+        _modoOffline = clientesLocal.isNotEmpty;
+        _isLoading = false;
+      });
+    } else {
       setState(() => _isLoading = false);
     }
   }
@@ -149,6 +171,26 @@ class _ClientesScreenState extends State<ClientesScreen> {
               ),
             ),
 
+            if (_modoOffline)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                color: AppColors.warning.withValues(alpha: 0.1),
+                child: Row(
+                  children: [
+                    Icon(Icons.cloud_off, size: 16, color: AppColors.warning),
+                    SizedBox(width: 8),
+                    Text(
+                      'Modo offline — datos guardados localmente',
+                      style: TextStyle(fontSize: 12, color: AppColors.warning),
+                    ),
+                  ],
+                ),
+              ),
+
             Container(
               height: 1,
               color: AppColors.cardBorder.withValues(alpha: 0.5),
@@ -183,10 +225,43 @@ class _ClientesScreenState extends State<ClientesScreen> {
                       ),
                     ],
                   ),
-                  Icon(
-                    Icons.tune,
-                    size: 20,
-                    color: AppColors.textPrimary.withValues(alpha: 0.4),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MapaRutaScreen(),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.map_outlined,
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Ruta',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
