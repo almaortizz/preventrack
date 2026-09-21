@@ -12,6 +12,10 @@ import Preventistas from './pages/Preventistas'
 import Ventas from './pages/Ventas'
 import Reportes from './pages/Reportes'
 import Rutas from './pages/Rutas'
+import Cuotas from './pages/Cuotas'
+import Visitas from './pages/Visitas'
+import Administradores from './pages/Administradores'
+
 
 export default function App() {
   return (
@@ -40,15 +44,19 @@ export default function App() {
           />
 
           <Route path="ventas" element={<Ventas />} />
+          <Route path="cuotas" element={<Cuotas />} />
           <Route
             path="cotizaciones"
             element={<Placeholder title="Cotizaciones" />}
           />
          <Route path="rutas" element={<Rutas />} />
-          <Route path="visitas" element={<Placeholder title="Visitas" />} />
+         
+          <Route path="visitas" element={<Visitas />} />
+          <Route path="administradores" element={<Administradores />} />
           <Route
             path="reportes"
             element={<Placeholder title="Reportes" />}
+
           />
         </Route>
       </Routes>

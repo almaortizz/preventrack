@@ -7,9 +7,11 @@ const links = [
   { to: '/productos', label: 'Productos' },
   { to: '/categorias', label: 'Categorías' },
   { to: '/ventas', label: 'Ventas' },
+  { to: '/cuotas', label: 'Cuotas' },
   { to: '/rutas', label: 'Rutas' },
   { to: '/visitas', label: 'Visitas' },
   { to: '/reportes', label: 'Reportes' },
+  { to: '/administradores', label: 'Administradores' },
 ]
 
 export default function Sidebar() {

@@ -22,8 +22,13 @@ class VentaController extends Controller
             $query->where('preventista_vendedor_id', $request->preventista_vendedor_id);
         }
 
-        if ($request->filled('fecha')) {
-            $query->whereDate('fecha_hora', $request->fecha);
+
+        if ($request->filled('fecha_inicio')) {
+            $query->whereDate('fecha_hora', '>=', $request->fecha_inicio);
+        }
+
+        if ($request->filled('fecha_fin')) {
+            $query->whereDate('fecha_hora', '<=', $request->fecha_fin);
         }
 
         return response()->json(

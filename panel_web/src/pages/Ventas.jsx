@@ -25,6 +25,16 @@ const emptyForm = {
   notas: '',
 }
 
+function primerDiaDelMes() {
+  const hoy = new Date()
+  const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+  return primero.toISOString().slice(0, 10)
+}
+
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export default function Ventas() {
   const [ventas, setVentas] = useState([])
   const [clientes, setClientes] = useState([])
@@ -32,6 +42,12 @@ export default function Ventas() {
   const [preventistas, setPreventistas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  // Filtro de fechas (por defecto: mes actual)
+  const [fechaInicio, setFechaInicio] = useState(primerDiaDelMes())
+  const [fechaFin, setFechaFin] = useState(hoyISO())
+  const [viendoHistorial, setViendoHistorial] = useState(false)
+  const [exportando, setExportando] = useState(false)
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
@@ -48,8 +64,13 @@ export default function Ventas() {
 
   function cargar() {
     setLoading(true)
+    const params = {}
+    if (!viendoHistorial) {
+      if (fechaInicio) params.fecha_inicio = fechaInicio
+      if (fechaFin) params.fecha_fin = fechaFin
+    }
     client
-      .get('/ventas')
+      .get('/ventas', { params })
       .then((res) => setVentas(res.data.data ?? []))
       .catch(() => setError('No se pudo cargar la lista de pedidos.'))
       .finally(() => setLoading(false))
@@ -67,9 +88,53 @@ export default function Ventas() {
   }
 
   useEffect(() => {
-    cargar()
     cargarCatalogos()
   }, [])
+
+  useEffect(() => {
+    cargar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fechaInicio, fechaFin, viendoHistorial])
+
+  function verHistorialCompleto() {
+    setViendoHistorial(true)
+  }
+
+  function volverAlMesActual() {
+    setFechaInicio(primerDiaDelMes())
+    setFechaFin(hoyISO())
+    setViendoHistorial(false)
+  }
+
+  async function exportarExcel() {
+    setExportando(true)
+    try {
+      const params = {}
+      if (!viendoHistorial) {
+        if (fechaInicio) params.fecha_inicio = fechaInicio
+        if (fechaFin) params.fecha_fin = fechaFin
+      }
+      const res = await client.get('/reportes/ventas', {
+        params,
+        responseType: 'blob',
+      })
+      const nombreArchivo =
+        res.headers['content-disposition']?.match(/filename="?([^"]+)"?/)?.[1] ||
+        'reporte_ventas.xlsx'
+      const blobUrl = window.URL.createObjectURL(new Blob([res.data]))
+      const enlace = document.createElement('a')
+      enlace.href = blobUrl
+      enlace.download = nombreArchivo
+      document.body.appendChild(enlace)
+      enlace.click()
+      enlace.remove()
+      window.URL.revokeObjectURL(blobUrl)
+    } catch {
+      alert('No se pudo exportar el reporte.')
+    } finally {
+      setExportando(false)
+    }
+  }
 
   const clienteSeleccionado = clientes.find((c) => c.id === Number(form.cliente_id))
 
@@ -201,9 +266,19 @@ export default function Ventas() {
     }
   }
 
+  async function eliminar(venta) {
+    if (!confirm(`¿Estás seguro de eliminar el pedido ${venta.numero_orden}? Esta acción no se puede deshacer.`)) return
+    try {
+      await client.delete(`/ventas/${venta.id}`)
+      cargar()
+    } catch {
+      alert('No se pudo eliminar el pedido.')
+    }
+  }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-neutral-800">Ventas</h1>
         <button
           onClick={abrirNuevo}
@@ -212,6 +287,64 @@ export default function Ventas() {
           + Nuevo pedido
         </button>
       </div>
+
+      {/* Filtros de fecha, historial y exportar */}
+      <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-4 mb-4 flex flex-wrap items-end gap-3">
+        {!viendoHistorial && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Desde</label>
+              <input
+                type="date"
+                value={fechaInicio}
+                onChange={(e) => setFechaInicio(e.target.value)}
+                className="rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Hasta</label>
+              <input
+                type="date"
+                value={fechaFin}
+                onChange={(e) => setFechaFin(e.target.value)}
+                className="rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
+              />
+            </div>
+          </>
+        )}
+
+        {viendoHistorial ? (
+          <button
+            onClick={volverAlMesActual}
+            className="text-secondary text-sm font-semibold hover:underline"
+          >
+            ← Volver al mes actual
+          </button>
+        ) : (
+          <button
+            onClick={verHistorialCompleto}
+            className="text-secondary text-sm font-semibold hover:underline"
+          >
+            Ver historial completo
+          </button>
+        )}
+
+        <div className="flex-1" />
+
+        <button
+          onClick={exportarExcel}
+          disabled={exportando}
+          className="bg-secondary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-secondary/90 disabled:opacity-50"
+        >
+          {exportando ? 'Exportando...' : '⬇ Exportar a Excel'}
+        </button>
+      </div>
+
+      {viendoHistorial && (
+        <p className="text-xs text-neutral-400 mb-3">
+          Mostrando el historial completo (todas las fechas).
+        </p>
+      )}
 
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
@@ -291,13 +424,19 @@ export default function Ventas() {
                         </button>
                       </>
                     )}
+                    <button
+                      onClick={() => eliminar(v)}
+                      className="text-neutral-500 font-medium hover:underline"
+                    >
+                      Eliminar
+                    </button>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
                 <td colSpan={7} className="px-4 py-6 text-center text-neutral-400">
-                  No hay pedidos registrados.
+                  No hay pedidos registrados en este rango de fechas.
                 </td>
               </tr>
             )}
