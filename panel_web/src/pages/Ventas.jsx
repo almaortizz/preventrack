@@ -62,6 +62,9 @@ export default function Ventas() {
   const [nuevaDireccion, setNuevaDireccion] = useState('')
   const [guardandoDireccion, setGuardandoDireccion] = useState(false)
 
+  // Ver detalles (GPS y control anti-fraude)
+  const [detalleAbierto, setDetalleAbierto] = useState(null)
+
   function cargar() {
     setLoading(true)
     const params = {}
@@ -177,7 +180,6 @@ export default function Ventas() {
         es_principal: true,
       })
       setNuevaDireccion('')
-      // Refrescamos el cliente en la lista local para que aparezca el nuevo domicilio
       const clienteActualizado = await client.get(`/clientes/${form.cliente_id}`)
       setClientes((prev) =>
         prev.map((c) => (c.id === Number(form.cliente_id) ? clienteActualizado.data : c)),
@@ -276,6 +278,30 @@ export default function Ventas() {
     }
   }
 
+  function abrirDetalle(venta) {
+    setDetalleAbierto(venta)
+  }
+
+  function cerrarDetalle() {
+    setDetalleAbierto(null)
+  }
+
+  function formatearDuracion(segundos) {
+    if (segundos == null || isNaN(segundos)) return '—'
+    if (segundos < 60) return `${Math.round(segundos)} seg`
+    const minutos = Math.floor(segundos / 60)
+    const resto = Math.round(segundos % 60)
+    return `${minutos} min ${resto} seg`
+  }
+
+  function calcularDuracionCreacion(venta) {
+    if (!venta.fecha_inicio_creacion || !venta.fecha_fin_creacion) return null
+    const inicio = new Date(venta.fecha_inicio_creacion)
+    const fin = new Date(venta.fecha_fin_creacion)
+    const segundos = (fin - inicio) / 1000
+    return segundos >= 0 ? segundos : null
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -288,7 +314,6 @@ export default function Ventas() {
         </button>
       </div>
 
-      {/* Filtros de fecha, historial y exportar */}
       <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-4 mb-4 flex flex-wrap items-end gap-3">
         {!viendoHistorial && (
           <>
@@ -392,6 +417,12 @@ export default function Ventas() {
                     {new Date(v.fecha_hora).toLocaleDateString('es-MX')}
                   </td>
                   <td className="px-4 py-3 text-right space-x-3">
+                    <button
+                      onClick={() => abrirDetalle(v)}
+                      className="text-neutral-600 font-medium hover:underline"
+                    >
+                      Detalles
+                    </button>
                     {v.estado === 'pendiente' && (
                       <>
                         <button
@@ -444,7 +475,6 @@ export default function Ventas() {
         </table>
       </div>
 
-      {/* Modal nuevo pedido */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
           <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -617,7 +647,6 @@ export default function Ventas() {
         </div>
       )}
 
-      {/* Modal asignar entrega */}
       {asignando && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
           <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm">
@@ -648,6 +677,124 @@ export default function Ventas() {
                 className="bg-primary text-white font-semibold px-4 py-2 rounded-lg hover:bg-primary/90"
               >
                 Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {detalleAbierto && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
+          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-primary">
+                Detalles — {detalleAbierto.numero_orden}
+              </h2>
+              <button
+                onClick={cerrarDetalle}
+                className="text-neutral-400 hover:text-neutral-600 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="text-xs text-neutral-400">Cliente</p>
+                <p className="font-medium text-neutral-800">
+                  {detalleAbierto.domicilio?.cliente?.nombre_negocio || '—'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-neutral-400">Preventista vendedor</p>
+                <p className="font-medium text-neutral-800">
+                  {detalleAbierto.vendedor
+                    ? `${detalleAbierto.vendedor.nombre} ${detalleAbierto.vendedor.apellidos}`
+                    : '—'}
+                </p>
+              </div>
+
+
+              <div className="border-t border-neutral-100 pt-3">
+                <p className="text-xs text-neutral-400 mb-2">Productos pedidos</p>
+                <div className="space-y-1">
+                  {(detalleAbierto.detalle || []).map((item) => (
+                    <div key={item.id} className="flex items-center justify-between text-neutral-700">
+                      <span>{item.cantidad} × {item.producto?.nombre || 'Producto'}</span>
+                      <span className="font-medium">${Number(item.subtotal).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between font-bold text-neutral-800 border-t border-neutral-100 mt-2 pt-2">
+                  <span>Total</span>
+                  <span>${Number(detalleAbierto.total).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-neutral-100 pt-3">
+                <p className="text-xs text-neutral-400 mb-1">Ubicación GPS al crear el pedido</p>
+                {detalleAbierto.latitud_registro && detalleAbierto.longitud_registro ? (
+                  <>
+                    <p className="font-medium text-neutral-800">
+                      {Number(detalleAbierto.latitud_registro).toFixed(6)}, {Number(detalleAbierto.longitud_registro).toFixed(6)}
+                    </p>
+                    <a href={`https://www.openstreetmap.org/?mlat=${detalleAbierto.latitud_registro}&mlon=${detalleAbierto.longitud_registro}#map=17/${detalleAbierto.latitud_registro}/${detalleAbierto.longitud_registro}`} target="_blank" rel="noopener noreferrer" className="text-secondary text-xs font-semibold hover:underline">
+                      Ver en el mapa →
+                    </a>
+                  </>
+                ) : (
+                  <p className="text-neutral-400 italic">Sin coordenadas registradas</p>
+                )}
+              </div>
+
+              <div className="border-t border-neutral-100 pt-3">
+                <p className="text-xs text-neutral-400 mb-1">Control de tiempo (anti-fraude)</p>
+                {detalleAbierto.fecha_inicio_creacion && detalleAbierto.fecha_fin_creacion ? (
+                  <>
+                    <p className="text-neutral-600">
+                      Inicio: {new Date(detalleAbierto.fecha_inicio_creacion).toLocaleString('es-MX')}
+                    </p>
+                    <p className="text-neutral-600">
+                      Fin: {new Date(detalleAbierto.fecha_fin_creacion).toLocaleString('es-MX')}
+                    </p>
+                    {(() => {
+                      const duracion = calcularDuracionCreacion(detalleAbierto)
+                      const sospechoso = duracion !== null && duracion < 5
+                      return (
+                        <p className={`font-semibold mt-1 ${sospechoso ? 'text-red-600' : 'text-neutral-800'}`}>
+                          Duración: {formatearDuracion(duracion)}
+                          {sospechoso && ' — ⚠ Sospechosamente rápido'}
+                        </p>
+                      )
+                    })()}
+                  </>
+                ) : (
+                  <p className="text-neutral-400 italic">Sin datos de control de tiempo</p>
+                )}
+              </div>
+
+              {detalleAbierto.notas && (
+                <div className="border-t border-neutral-100 pt-3">
+                  <p className="text-xs text-neutral-400 mb-1">Notas</p>
+                  <p className="text-neutral-700">{detalleAbierto.notas}</p>
+                </div>
+              )}
+
+              {detalleAbierto.motivo_cancelacion && (
+                <div className="border-t border-neutral-100 pt-3">
+                  <p className="text-xs text-neutral-400 mb-1">Motivo de cancelación</p>
+                  <p className="text-red-600">{detalleAbierto.motivo_cancelacion}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <button
+                onClick={cerrarDetalle}
+                className="px-4 py-2 rounded-lg text-neutral-600 hover:bg-neutral-100"
+              >
+                Cerrar
               </button>
             </div>
           </div>

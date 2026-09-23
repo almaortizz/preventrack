@@ -10,7 +10,7 @@ class DetalleRuta extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['ruta_id', 'domicilio_id', 'orden_visita', 'estado'];
+    protected $fillable = ['ruta_id', 'domicilio_id', 'venta_id', 'orden_visita', 'estado'];
 
     public function ruta()
     {
@@ -20,5 +20,10 @@ class DetalleRuta extends Model
     public function domicilio()
     {
         return $this->belongsTo(Domicilio::class, 'domicilio_id');
+    }
+
+    public function venta()
+    {
+        return $this->belongsTo(Venta::class, 'venta_id');
     }
 }

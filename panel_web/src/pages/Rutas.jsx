@@ -17,7 +17,6 @@ const ESTADO_LABEL = {
 
 export default function Rutas() {
   const [rutas, setRutas] = useState([])
-  const [clientes, setClientes] = useState([])
   const [preventistas, setPreventistas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -27,9 +26,9 @@ export default function Rutas() {
   const [showForm, setShowForm] = useState(false)
   const [usuarioId, setUsuarioId] = useState('')
   const [fecha, setFecha] = useState('')
-  const [paradas, setParadas] = useState([]) // [{ domicilio_id, texto }]
-  const [clienteTemp, setClienteTemp] = useState('')
-  const [domicilioTemp, setDomicilioTemp] = useState('')
+  const [paradas, setParadas] = useState([]) // [{ venta_id, texto }]
+  const [pedidosDisponibles, setPedidosDisponibles] = useState([])
+  const [cargandoPedidos, setCargandoPedidos] = useState(false)
   const [formError, setFormError] = useState('')
 
   function cargar() {
@@ -42,7 +41,6 @@ export default function Rutas() {
   }
 
   function cargarCatalogos() {
-    client.get('/clientes').then((res) => setClientes(res.data.data ?? []))
     client.get('/usuarios').then((res) => {
       const todos = res.data.data ?? []
       setPreventistas(
@@ -56,38 +54,52 @@ export default function Rutas() {
     cargarCatalogos()
   }, [])
 
-  const clienteTempObj = clientes.find((c) => c.id === Number(clienteTemp))
+  useEffect(() => {
+    if (!usuarioId) {
+      setPedidosDisponibles([])
+      return
+    }
+    setCargandoPedidos(true)
+    client
+      .get('/ventas', {
+        params: {
+          preventista_entrega_id: usuarioId,
+          estado: 'en_ruta',
+          per_page: 100,
+        },
+      })
+      .then((res) => setPedidosDisponibles(res.data.data ?? []))
+      .catch(() => setPedidosDisponibles([]))
+      .finally(() => setCargandoPedidos(false))
+  }, [usuarioId])
 
   function abrirNuevo() {
     setUsuarioId('')
     setFecha('')
     setParadas([])
-    setClienteTemp('')
-    setDomicilioTemp('')
+    setPedidosDisponibles([])
     setFormError('')
     setShowForm(true)
   }
 
-  function agregarParada() {
-    if (!domicilioTemp) return
-    const cliente = clientes.find((c) => c.id === Number(clienteTemp))
-    const domicilio = cliente?.domicilios?.find((d) => d.id === Number(domicilioTemp))
-    if (!domicilio) return
-
+  function agregarParada(venta) {
     setParadas((prev) => [
       ...prev,
       {
-        domicilio_id: domicilio.id,
-        texto: `${cliente.nombre_negocio} — ${domicilio.direccion}`,
+        venta_id: venta.id,
+        texto: `${venta.numero_orden} — ${venta.domicilio?.cliente?.nombre_negocio || '—'} (${venta.domicilio?.direccion || '—'})`,
       },
     ])
-    setClienteTemp('')
-    setDomicilioTemp('')
   }
 
   function quitarParada(index) {
     setParadas((prev) => prev.filter((_, i) => i !== index))
   }
+
+  const idsYaAgregados = paradas.map((p) => p.venta_id)
+  const pedidosParaElegir = pedidosDisponibles.filter(
+    (v) => !idsYaAgregados.includes(v.id),
+  )
 
   async function guardar(e) {
     e.preventDefault()
@@ -102,7 +114,7 @@ export default function Rutas() {
       return
     }
     if (!paradas.length) {
-      setFormError('Agrega al menos una parada.')
+      setFormError('Agrega al menos un pedido a la ruta.')
       return
     }
 
@@ -110,7 +122,7 @@ export default function Rutas() {
       await client.post('/rutas', {
         usuario_id: Number(usuarioId),
         fecha,
-        domicilios: paradas.map((p) => p.domicilio_id),
+        ventas: paradas.map((p) => p.venta_id),
       })
       setShowForm(false)
       cargar()
@@ -214,6 +226,7 @@ export default function Rutas() {
                           <thead>
                             <tr className="text-left text-neutral-400">
                               <th className="py-2">#</th>
+                              <th className="py-2">Pedido</th>
                               <th className="py-2">Cliente</th>
                               <th className="py-2">Dirección</th>
                               <th className="py-2">Estado</th>
@@ -227,6 +240,7 @@ export default function Rutas() {
                               .map((d) => (
                                 <tr key={d.id} className="border-t border-neutral-100">
                                   <td className="py-2">{d.orden_visita}</td>
+                                  <td className="py-2">{d.venta?.numero_orden || '—'}</td>
                                   <td className="py-2">
                                     {d.domicilio?.cliente?.nombre_negocio || '—'}
                                   </td>
@@ -278,10 +292,13 @@ export default function Rutas() {
             <h2 className="text-lg font-bold text-primary mb-4">Nueva ruta</h2>
             <form onSubmit={guardar} className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Preventista</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Preventista (repartidor)</label>
                 <select
                   value={usuarioId}
-                  onChange={(e) => setUsuarioId(e.target.value)}
+                  onChange={(e) => {
+                    setUsuarioId(e.target.value)
+                    setParadas([])
+                  }}
                   className="w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary"
                   required
                 >
@@ -305,63 +322,59 @@ export default function Rutas() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Agregar parada</label>
-                <div className="flex gap-2 mb-2">
-                  <select
-                    value={clienteTemp}
-                    onChange={(e) => {
-                      setClienteTemp(e.target.value)
-                      setDomicilioTemp('')
-                    }}
-                    className="flex-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
-                  >
-                    <option value="">Cliente</option>
-                    {clientes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre_negocio}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={domicilioTemp}
-                    onChange={(e) => setDomicilioTemp(e.target.value)}
-                    className="flex-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
-                    disabled={!clienteTemp}
-                  >
-                    <option value="">Dirección</option>
-                    {(clienteTempObj?.domicilios || []).map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.direccion}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={agregarParada}
-                    className="bg-secondary text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-secondary/90"
-                  >
-                    Agregar
-                  </button>
-                </div>
+              {usuarioId && (
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">
+                    Pedidos pendientes de entrega para este preventista
+                  </label>
 
-                {paradas.length > 0 && (
-                  <ol className="list-decimal list-inside space-y-1 text-sm text-neutral-700 bg-neutral-50 rounded-lg p-3">
-                    {paradas.map((p, index) => (
-                      <li key={index} className="flex items-center justify-between">
-                        <span>{p.texto}</span>
-                        <button
-                          type="button"
-                          onClick={() => quitarParada(index)}
-                          className="text-red-600 text-xs font-medium ml-2"
-                        >
-                          Quitar
-                        </button>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </div>
+                  {cargandoPedidos ? (
+                    <p className="text-sm text-neutral-400">Buscando pedidos...</p>
+                  ) : pedidosParaElegir.length ? (
+                    <div className="border border-neutral-200 rounded-lg divide-y divide-neutral-100 max-h-48 overflow-y-auto mb-2">
+                      {pedidosParaElegir.map((v) => (
+                        <div key={v.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                          <span>
+                            {v.numero_orden} — {v.domicilio?.cliente?.nombre_negocio || '—'}{' '}
+                            <span className="text-neutral-400">({v.domicilio?.direccion || '—'})</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => agregarParada(v)}
+                            className="text-secondary text-xs font-semibold hover:underline ml-2 shrink-0"
+                          >
+                            + Agregar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-neutral-400 mb-2">
+                      Este preventista no tiene pedidos pendientes de entrega ahora mismo (asígnalos primero desde Ventas).
+                    </p>
+                  )}
+
+                  {paradas.length > 0 && (
+                    <>
+                      <p className="text-xs font-semibold text-neutral-600 mb-1">Orden de la ruta:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-sm text-neutral-700 bg-neutral-50 rounded-lg p-3">
+                        {paradas.map((p, index) => (
+                          <li key={index} className="flex items-center justify-between">
+                            <span>{p.texto}</span>
+                            <button
+                              type="button"
+                              onClick={() => quitarParada(index)}
+                              className="text-red-600 text-xs font-medium ml-2"
+                            >
+                              Quitar
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                    </>
+                  )}
+                </div>
+              )}
 
               {formError && <p className="text-red-600 text-sm">{formError}</p>}
 

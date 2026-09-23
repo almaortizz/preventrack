@@ -12,7 +12,7 @@ class VentaController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Venta::with(['domicilio.cliente', 'vendedor', 'repartidor']);
+        $query = Venta::with(['domicilio.cliente', 'vendedor', 'repartidor', 'detalle.producto']);
 
         if ($request->filled('estado')) {
             $query->where('estado', $request->estado);
@@ -22,6 +22,16 @@ class VentaController extends Controller
             $query->where('preventista_vendedor_id', $request->preventista_vendedor_id);
         }
 
+        if ($request->filled('cliente_id')) {
+            $query->whereHas('domicilio', function ($q) use ($request) {
+                $q->where('cliente_id', $request->cliente_id);
+            });
+        }
+
+
+        if ($request->filled('preventista_entrega_id')) {
+            $query->where('preventista_entrega_id', $request->preventista_entrega_id);
+        }
 
         if ($request->filled('fecha_inicio')) {
             $query->whereDate('fecha_hora', '>=', $request->fecha_inicio);

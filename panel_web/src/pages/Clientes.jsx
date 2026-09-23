@@ -21,6 +21,20 @@ const emptyDomicilio = {
   estado: 'activo',
 }
 
+const ESTADO_STYLES = {
+  pendiente: 'bg-yellow-100 text-yellow-700',
+  en_ruta: 'bg-blue-100 text-blue-700',
+  entregado: 'bg-green-100 text-green-700',
+  cancelado: 'bg-red-100 text-red-700',
+}
+
+const ESTADO_LABEL = {
+  pendiente: 'Pendiente',
+  en_ruta: 'En ruta',
+  entregado: 'Entregado',
+  cancelado: 'Cancelado',
+}
+
 export default function Clientes() {
   const [clientes, setClientes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -38,6 +52,11 @@ export default function Clientes() {
   const [domForm, setDomForm] = useState(emptyDomicilio)
   const [domError, setDomError] = useState('')
   const [buscandoUbicacion, setBuscandoUbicacion] = useState(false)
+
+  // Historial del cliente
+  const [historialCliente, setHistorialCliente] = useState(null)
+  const [historialVentas, setHistorialVentas] = useState([])
+  const [historialLoading, setHistorialLoading] = useState(false)
 
   function cargar() {
     setLoading(true)
@@ -188,6 +207,28 @@ export default function Clientes() {
     }
   }
 
+  // --- Historial ---
+
+  async function abrirHistorialCliente(cliente) {
+    setHistorialCliente(cliente)
+    setHistorialLoading(true)
+    try {
+      const res = await client.get('/ventas', {
+        params: { cliente_id: cliente.id, per_page: 100 },
+      })
+      setHistorialVentas(res.data.data ?? [])
+    } catch {
+      setHistorialVentas([])
+    } finally {
+      setHistorialLoading(false)
+    }
+  }
+
+  function cerrarHistorialCliente() {
+    setHistorialCliente(null)
+    setHistorialVentas([])
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -244,10 +285,16 @@ export default function Clientes() {
                     </td>
                     <td className="px-4 py-3 text-right space-x-3">
                       <button
+                        onClick={() => abrirHistorialCliente(c)}
+                        className="text-primary font-medium hover:underline"
+                      >
+                        Historial
+                      </button>
+                      <button
                         onClick={() =>
                           setExpandidoId(expandidoId === c.id ? null : c.id)
                         }
-                        className="text-primary font-medium hover:underline"
+                        className="text-secondary font-medium hover:underline"
                       >
                         {expandidoId === c.id ? 'Ocultar' : 'Direcciones'}
                       </button>
@@ -545,6 +592,73 @@ export default function Clientes() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal historial del cliente */}
+      {historialCliente && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
+          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-primary">
+                Historial — {historialCliente.nombre_negocio}
+              </h2>
+              <button
+                onClick={cerrarHistorialCliente}
+                className="text-neutral-400 hover:text-neutral-600 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {historialLoading ? (
+              <p className="text-neutral-400 text-center py-8">Cargando...</p>
+            ) : historialVentas.length ? (
+              <div className="space-y-4">
+                {historialVentas.map((v) => (
+                  <div key={v.id} className="border border-neutral-100 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="font-semibold text-neutral-800">{v.numero_orden}</p>
+                        <p className="text-xs text-neutral-400">
+                          Pedido: {new Date(v.fecha_hora).toLocaleString('es-MX')}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${
+                          ESTADO_STYLES[v.estado] || 'bg-neutral-100 text-neutral-600'
+                        }`}
+                      >
+                        {ESTADO_LABEL[v.estado] || v.estado}
+                      </span>
+                    </div>
+
+                    <div className="text-sm text-neutral-700 space-y-1 mb-2">
+                      {(v.detalle || []).map((item) => (
+                        <div key={item.id} className="flex items-center justify-between">
+                          <span>{item.cantidad} × {item.producto?.nombre || 'Producto'}</span>
+                          <span className="font-medium">${Number(item.subtotal).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm border-t border-neutral-100 pt-2">
+                      <span className="text-neutral-500">
+                        {v.fecha_entrega
+                          ? `Entregado: ${new Date(v.fecha_entrega).toLocaleDateString('es-MX')}${v.hora_entrega ? ' ' + v.hora_entrega : ''}`
+                          : 'Aún sin entregar'}
+                      </span>
+                      <span className="font-bold text-neutral-800">${Number(v.total).toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-neutral-400 text-center py-8">
+                Este cliente no tiene pedidos registrados.
+              </p>
+            )}
           </div>
         </div>
       )}
