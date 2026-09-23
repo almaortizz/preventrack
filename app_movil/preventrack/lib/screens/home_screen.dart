@@ -26,15 +26,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Widget> _getScreens(bool admin) {
     if (admin) {
-      return const [
+      return [
         DashboardAdminScreen(),
         ClientesScreen(),
         PedidosScreen(),
         EntregasScreen(),
       ];
     }
-    return const [
-      DashboardScreen(),
+    return [
+      DashboardScreen(onVerPedidos: () => setState(() => _selectedIndex = 2)),
       ClientesScreen(),
       PedidosScreen(),
       EntregasScreen(),

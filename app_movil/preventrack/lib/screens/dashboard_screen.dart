@@ -6,9 +6,12 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/sync_service.dart';
+import 'detalle_pedido_screen.dart';
+import 'catalogo_productos_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final VoidCallback? onVerPedidos;
+  const DashboardScreen({super.key, this.onVerPedidos});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -62,8 +65,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             '${resultado['subidas']} pedido${resultado['subidas'] == 1 ? '' : 's'} sincronizado${resultado['subidas'] == 1 ? '' : 's'} correctamente';
         _pendientesSync = 0;
       });
-      // Recargar dashboard con datos actualizados
-      _cargarDashboard();
+      // Recargar dashboard sin mostrar spinner
+      try {
+        final result = await _api.get('dashboard');
+        if (result['statusCode'] == 200 && mounted) {
+          setState(() => _dashboardData = result['data']);
+        }
+      } catch (_) {}
       // Ocultar mensaje después de 4 segundos
       Future.delayed(const Duration(seconds: 4), () {
         if (mounted) setState(() => _syncMensaje = null);
@@ -73,6 +81,94 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _pendientesSync = resultado['fallidas'];
       });
     }
+  }
+
+  void _mostrarSelectorCliente() async {
+    final result = await _api.get('clientes');
+    if (result['statusCode'] != 200) return;
+
+    final data = result['data'];
+    final clientes = data is List ? data : (data['data'] ?? []);
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        minChildSize: 0.3,
+        expand: false,
+        builder: (_, scrollController) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Seleccionar cliente',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: Icon(
+                      Icons.close,
+                      color: AppColors.textPrimary.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: clientes.length,
+                itemBuilder: (_, index) {
+                  final cliente = clientes[index];
+                  final nombre = cliente['nombre_negocio'] ?? 'Sin nombre';
+                  final folio = cliente['folio'] ?? '';
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      child: Text(
+                        nombre[0].toUpperCase(),
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    title: Text(nombre),
+                    subtitle: Text('ID: #$folio'),
+                    trailing: const Icon(Icons.chevron_right, size: 20),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              CatalogoProductosScreen(cliente: cliente),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -343,7 +439,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           bottom: 16,
           right: 16,
           child: FloatingActionButton(
-            onPressed: () {},
+            onPressed: _mostrarSelectorCliente,
             backgroundColor: AppColors.primary,
             child: const Icon(Icons.add, color: AppColors.white),
           ),
@@ -600,7 +696,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             GestureDetector(
-              onTap: () {},
+              onTap: () {
+                if (widget.onVerPedidos != null) widget.onVerPedidos!();
+              },
               child: const Text(
                 'Ver todos',
                 style: TextStyle(
@@ -651,7 +749,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final total = pedido['total'] ?? '0';
     final numero = pedido['numero_orden'] ?? '';
     final domicilio = pedido['domicilio'];
-    final vendedor = pedido['vendedor'];
+
     String clienteNombre = 'Cliente';
     if (domicilio != null) {
       final cliente = domicilio['cliente'];
@@ -688,77 +786,87 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? '#${numero.substring(0, 12)}'
         : '#$numero';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      numeroCorto,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: estadoColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        estadoLabel,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: estadoColor,
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DetallePedidoScreen(pedido: pedido),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        numeroCorto,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  clienteNombre,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textPrimary.withValues(alpha: 0.5),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: estadoColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          estadoLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: estadoColor,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    clienteNombre,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textPrimary.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Text(
-            '\$$total',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+            Text(
+              '\$$total',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
-          Icon(
-            Icons.chevron_right,
-            color: AppColors.textPrimary.withValues(alpha: 0.25),
-            size: 20,
-          ),
-        ],
+            const SizedBox(width: 4),
+            Icon(
+              Icons.chevron_right,
+              color: AppColors.textPrimary.withValues(alpha: 0.25),
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
   }

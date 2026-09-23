@@ -54,4 +54,13 @@ class AuthProvider with ChangeNotifier {
     _usuario = null;
     notifyListeners();
   }
+
+  // Actualizar términos aceptados localmente
+  Future<void> aceptarTerminosLocal() async {
+    await _authService.actualizarUsuarioLocal({'terminos_aceptados': 1});
+    if (_usuario != null) {
+      _usuario!['terminos_aceptados'] = 1;
+    }
+    notifyListeners();
+  }
 }

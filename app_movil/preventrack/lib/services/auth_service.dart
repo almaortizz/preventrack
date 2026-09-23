@@ -73,4 +73,15 @@ class AuthService {
     }
     return null;
   }
+
+  // Actualizar datos del usuario guardado localmente
+  Future<void> actualizarUsuarioLocal(Map<String, dynamic> cambios) async {
+    final prefs = await SharedPreferences.getInstance();
+    final usuarioStr = prefs.getString('usuario');
+    if (usuarioStr != null) {
+      final usuario = jsonDecode(usuarioStr) as Map<String, dynamic>;
+      usuario.addAll(cambios);
+      await prefs.setString('usuario', jsonEncode(usuario));
+    }
+  }
 }

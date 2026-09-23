@@ -231,7 +231,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 32),
                 Text(
-                  '© 2026 Preventrack Logistics.\nTodos los derechos reservados.',
+                  '© 2026 Preventrack.\nTodos los derechos reservados.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 11,

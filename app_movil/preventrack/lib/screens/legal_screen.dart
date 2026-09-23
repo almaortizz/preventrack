@@ -13,7 +13,8 @@ class LegalScreen extends StatefulWidget {
   State<LegalScreen> createState() => _LegalScreenState();
 }
 
-class _LegalScreenState extends State<LegalScreen> with SingleTickerProviderStateMixin {
+class _LegalScreenState extends State<LegalScreen>
+    with SingleTickerProviderStateMixin {
   bool _avisoAceptado = false;
   bool _terminosAceptados = false;
   bool _isLoading = false;
@@ -48,13 +49,15 @@ class _LegalScreenState extends State<LegalScreen> with SingleTickerProviderStat
 
       if (response.statusCode == 200 && mounted) {
         final auth = Provider.of<AuthProvider>(context, listen: false);
-        auth.usuario?['terminos_aceptados'] = true;
+        await auth.aceptarTerminosLocal();
         Navigator.pushReplacementNamed(context, '/home');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al aceptar terminos. Intenta de nuevo.')),
+          const SnackBar(
+            content: Text('Error al aceptar terminos. Intenta de nuevo.'),
+          ),
         );
       }
     }
@@ -171,9 +174,17 @@ class _LegalScreenState extends State<LegalScreen> with SingleTickerProviderStat
             child: TabBar(
               controller: _tabController,
               labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textPrimary.withValues(alpha: 0.5),
-              labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 14),
+              unselectedLabelColor: AppColors.textPrimary.withValues(
+                alpha: 0.5,
+              ),
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.normal,
+                fontSize: 14,
+              ),
               indicatorColor: AppColors.primary,
               indicatorWeight: 3,
               tabs: const [
@@ -200,7 +211,9 @@ class _LegalScreenState extends State<LegalScreen> with SingleTickerProviderStat
             decoration: BoxDecoration(
               color: AppColors.white,
               border: Border(
-                top: BorderSide(color: AppColors.cardBorder.withValues(alpha: 0.5)),
+                top: BorderSide(
+                  color: AppColors.cardBorder.withValues(alpha: 0.5),
+                ),
               ),
             ),
             child: Column(
@@ -214,17 +227,25 @@ class _LegalScreenState extends State<LegalScreen> with SingleTickerProviderStat
                         height: 22,
                         child: Checkbox(
                           value: _avisoAceptado,
-                          onChanged: (v) => setState(() => _avisoAceptado = v ?? false),
+                          onChanged: (v) =>
+                              setState(() => _avisoAceptado = v ?? false),
                           activeColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                          side: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.3)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          side: BorderSide(
+                            color: AppColors.textPrimary.withValues(alpha: 0.3),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       const Expanded(
                         child: Text(
                           'He leido y acepto el Aviso de Privacidad',
-                          style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ),
                     ],
@@ -232,7 +253,8 @@ class _LegalScreenState extends State<LegalScreen> with SingleTickerProviderStat
                 ),
                 const SizedBox(height: 10),
                 GestureDetector(
-                  onTap: () => setState(() => _terminosAceptados = !_terminosAceptados),
+                  onTap: () =>
+                      setState(() => _terminosAceptados = !_terminosAceptados),
                   child: Row(
                     children: [
                       SizedBox(
@@ -240,17 +262,25 @@ class _LegalScreenState extends State<LegalScreen> with SingleTickerProviderStat
                         height: 22,
                         child: Checkbox(
                           value: _terminosAceptados,
-                          onChanged: (v) => setState(() => _terminosAceptados = v ?? false),
+                          onChanged: (v) =>
+                              setState(() => _terminosAceptados = v ?? false),
                           activeColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                          side: BorderSide(color: AppColors.textPrimary.withValues(alpha: 0.3)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          side: BorderSide(
+                            color: AppColors.textPrimary.withValues(alpha: 0.3),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       const Expanded(
                         child: Text(
                           'He leido y acepto los Terminos y Condiciones',
-                          style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ),
                     ],
@@ -261,21 +291,29 @@ class _LegalScreenState extends State<LegalScreen> with SingleTickerProviderStat
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: (_avisoAceptado && _terminosAceptados && !_isLoading)
+                    onPressed:
+                        (_avisoAceptado && _terminosAceptados && !_isLoading)
                         ? _aceptarTerminos
                         : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: (_avisoAceptado && _terminosAceptados)
                           ? AppColors.primary
                           : AppColors.primary.withValues(alpha: 0.3),
-                      disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.3),
-                      disabledForegroundColor: AppColors.white.withValues(alpha: 0.7),
+                      disabledBackgroundColor: AppColors.primary.withValues(
+                        alpha: 0.3,
+                      ),
+                      disabledForegroundColor: AppColors.white.withValues(
+                        alpha: 0.7,
+                      ),
                     ),
                     child: _isLoading
                         ? const SizedBox(
                             height: 22,
                             width: 22,
-                            child: CircularProgressIndicator(color: AppColors.white, strokeWidth: 2.5),
+                            child: CircularProgressIndicator(
+                              color: AppColors.white,
+                              strokeWidth: 2.5,
+                            ),
                           )
                         : const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
