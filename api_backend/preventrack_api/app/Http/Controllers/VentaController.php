@@ -31,8 +31,10 @@ class VentaController extends Controller
             $query->whereDate('fecha_hora', '<=', $request->fecha_fin);
         }
 
+               $porPagina = $request->input('per_page', 20);
+
         return response()->json(
-            $query->orderByDesc('fecha_hora')->paginate(20)
+            $query->orderByDesc('fecha_hora')->paginate($porPagina)
         );
     }
 

@@ -17,12 +17,19 @@ class ReporteController extends Controller
         $request->validate([
             'fecha_inicio' => 'nullable|date',
             'fecha_fin' => 'nullable|date|after_or_equal:fecha_inicio',
+            'preventista_vendedor_id' => 'nullable|exists:usuarios,id',
+            'colorear_por_preventista' => 'nullable|boolean',
         ]);
 
         $nombreArchivo = 'reporte_ventas_' . now()->format('Y-m-d_His') . '.xlsx';
 
         return Excel::download(
-            new VentasExport($request->fecha_inicio, $request->fecha_fin),
+            new VentasExport(
+                $request->fecha_inicio,
+                $request->fecha_fin,
+                $request->preventista_vendedor_id,
+                $request->boolean('colorear_por_preventista')
+            ),
             $nombreArchivo
         );
     }
