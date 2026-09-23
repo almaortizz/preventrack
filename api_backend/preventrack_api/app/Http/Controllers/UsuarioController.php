@@ -36,12 +36,13 @@ class UsuarioController extends Controller
 
     public function store(Request $request)
     {
-        $datos = $request->validate([
+            $datos = $request->validate([
             'nombre' => 'required|string|max:100',
             'apellidos' => 'required|string|max:100',
             'edad' => 'nullable|integer|min:0|max:255',
             'telefono' => 'nullable|digits:10',
             'direccion' => 'nullable|string|max:255',
+            'color' => 'nullable|string|max:7',
             'usuario' => 'required|string|max:50|unique:usuarios,usuario',
             'password' => 'required|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/',
             'rol_id' => 'required|exists:roles,id',
@@ -62,12 +63,13 @@ class UsuarioController extends Controller
 
     public function update(Request $request, Usuario $usuario)
     {
-        $datos = $request->validate([
+               $datos = $request->validate([
             'nombre' => 'sometimes|string|max:100',
             'apellidos' => 'sometimes|string|max:100',
             'edad' => 'nullable|integer|min:0|max:255',
             'telefono' => 'nullable|digits:10',
             'direccion' => 'nullable|string|max:255',
+            'color' => 'nullable|string|max:7',
             'usuario' => 'sometimes|string|max:50|unique:usuarios,usuario,' . $usuario->id,
             'password' => 'nullable|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/',
             'rol_id' => 'sometimes|exists:roles,id',
