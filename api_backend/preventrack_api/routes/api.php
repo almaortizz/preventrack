@@ -28,6 +28,8 @@ Route::post('/login', [AuthController::class, 'login']);
 // -----------------------------------------------------------------
 Route::middleware('auth:sanctum')->group(function () {
 
+    Route::get('/monitoreo', [\App\Http\Controllers\MonitoreoController::class, 'index']);
+
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
@@ -82,6 +84,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('reportes/comisiones', [ReporteController::class, 'comisiones']);
 
     Route::post('usuarios/aceptar-terminos', [UsuarioController::class, 'aceptarTerminos']);
+    Route::post('/ubicacion', [UsuarioController::class, 'actualizarUbicacion']);
     Route::apiResource('usuarios', UsuarioController::class);
     Route::post('usuarios/{usuario}/bloquear', [UsuarioController::class, 'bloquear']);
     Route::post('usuarios/{usuario}/desbloquear', [UsuarioController::class, 'desbloquear']);

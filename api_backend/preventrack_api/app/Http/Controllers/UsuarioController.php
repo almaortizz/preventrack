@@ -136,4 +136,23 @@ class UsuarioController extends Controller
 
         return response()->json(['message' => 'Términos aceptados correctamente.', 'usuario' => $usuario]);
     }
+
+    // La app móvil llama esto periódicamente para reportar la ubicación actual
+    // del preventista/repartidor que tiene la sesión iniciada.
+    public function actualizarUbicacion(Request $request)
+    {
+        $datos = $request->validate([
+            'latitud' => 'required|numeric|between:-90,90',
+            'longitud' => 'required|numeric|between:-180,180',
+        ]);
+
+        $usuario = $request->user();
+        $usuario->update([
+            'ultima_latitud' => $datos['latitud'],
+            'ultima_longitud' => $datos['longitud'],
+            'ultima_ubicacion_at' => now(),
+        ]);
+
+        return response()->json(['message' => 'Ubicación actualizada correctamente.']);
+    }
 }

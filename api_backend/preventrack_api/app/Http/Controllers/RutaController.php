@@ -24,13 +24,14 @@ class RutaController extends Controller
     }
 
     // Arma la ruta completa a partir de pedidos ya asignados para entrega
-    public function store(Request $request)
+     public function store(Request $request)
     {
         $datos = $request->validate([
             'usuario_id' => 'required|exists:usuarios,id',
             'fecha' => 'required|date',
-            'ventas' => 'required|array|min:1',
-            'ventas.*' => 'required|exists:ventas,id',
+            'paradas' => 'required|array|min:1',
+            'paradas.*.domicilio_id' => 'required|exists:domicilios,id',
+            'paradas.*.venta_id' => 'nullable|exists:ventas,id',
         ]);
 
         $ruta = Ruta::create([
@@ -39,15 +40,10 @@ class RutaController extends Controller
             'estado' => 'planeada',
         ]);
 
-        foreach ($datos['ventas'] as $orden => $ventaId) {
-            $venta = Venta::find($ventaId);
-            if (!$venta) {
-                continue;
-            }
-
+        foreach ($datos['paradas'] as $orden => $parada) {
             $ruta->detalle()->create([
-                'domicilio_id' => $venta->domicilio_id,
-                'venta_id' => $venta->id,
+                'domicilio_id' => $parada['domicilio_id'],
+                'venta_id' => $parada['venta_id'] ?? null,
                 'orden_visita' => $orden + 1,
                 'estado' => 'pendiente',
             ]);

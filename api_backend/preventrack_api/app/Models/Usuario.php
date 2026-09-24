@@ -17,6 +17,7 @@ class Usuario extends Authenticatable
         'nombre', 'apellidos', 'edad', 'telefono', 'direccion', 'color',
         'usuario', 'password', 'rol_id', 'estado',
         'terminos_aceptados', 'fecha_aceptacion_terminos',
+        'ultima_latitud', 'ultima_longitud', 'ultima_ubicacion_at',
     ];
 
     protected $hidden = ['password'];

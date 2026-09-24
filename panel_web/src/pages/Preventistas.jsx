@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import client from '../api/client'
 
 const ROL_COLABORADOR = 2
@@ -14,6 +16,18 @@ const emptyForm = {
   password: '',
   estado: 'activo',
 }
+
+// Icono por defecto de Leaflet, cargado desde su CDN (evita el problema
+// típico de rutas rotas al usar Leaflet dentro de un proyecto con Vite).
+const iconoPreventista = new L.Icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+})
 
 function validarTelefono(telefono) {
   if (!telefono) return true
@@ -64,6 +78,16 @@ export default function Preventistas() {
 
   // Exportar todos (general, coloreado por preventista)
   const [exportandoTodos, setExportandoTodos] = useState(false)
+
+  // Monitoreo
+  const [monitoreoAbierto, setMonitoreoAbierto] = useState(false)
+  const [monitoreoData, setMonitoreoData] = useState([])
+  const [monitoreoLoading, setMonitoreoLoading] = useState(false)
+
+  // Mapa en tiempo real (dentro del modal de Monitoreo)
+  const mapaContenedorRef = useRef(null)
+  const mapaInstanciaRef = useRef(null)
+  const marcadoresRef = useRef([])
 
   function cargar() {
     setLoading(true)
@@ -215,7 +239,7 @@ export default function Preventistas() {
     if (!historialAbierto) return
     setExportandoHistorial(true)
     try {
-        const res = await client.get('/reportes/ventas', {
+      const res = await client.get('/reportes/ventas', {
         params: {
           preventista_vendedor_id: historialAbierto.id,
           fecha_inicio: primerDiaDelMes(),
@@ -269,6 +293,89 @@ export default function Preventistas() {
     }
   }
 
+  // --- Monitoreo ---
+
+  async function cargarMonitoreo() {
+    try {
+      const res = await client.get('/monitoreo')
+      setMonitoreoData(res.data ?? [])
+    } catch {
+      setMonitoreoData([])
+    }
+  }
+
+  async function abrirMonitoreo() {
+    setMonitoreoAbierto(true)
+    setMonitoreoLoading(true)
+    await cargarMonitoreo()
+    setMonitoreoLoading(false)
+  }
+
+  function cerrarMonitoreo() {
+    setMonitoreoAbierto(false)
+    setMonitoreoData([])
+  }
+
+  // Refresca los datos de monitoreo (incluye ubicaciones) cada 30 segundos
+  // mientras el modal esté abierto.
+  useEffect(() => {
+    if (!monitoreoAbierto) return
+    const intervalo = setInterval(() => {
+      cargarMonitoreo()
+    }, 30000)
+    return () => clearInterval(intervalo)
+  }, [monitoreoAbierto])
+
+  // Inicializa el mapa de Leaflet cuando se abre el modal, y lo destruye
+  // cuando se cierra.
+  useEffect(() => {
+    if (monitoreoAbierto && mapaContenedorRef.current && !mapaInstanciaRef.current) {
+      mapaInstanciaRef.current = L.map(mapaContenedorRef.current).setView(
+        [19.0414, -98.2063],
+        12,
+      )
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(mapaInstanciaRef.current)
+    }
+
+    if (!monitoreoAbierto && mapaInstanciaRef.current) {
+      mapaInstanciaRef.current.remove()
+      mapaInstanciaRef.current = null
+      marcadoresRef.current = []
+    }
+  }, [monitoreoAbierto])
+
+  // Actualiza los marcadores cada vez que llegan datos nuevos de monitoreo.
+  useEffect(() => {
+    if (!mapaInstanciaRef.current) return
+
+    marcadoresRef.current.forEach((m) => m.remove())
+    marcadoresRef.current = []
+
+    const puntos = []
+    monitoreoData.forEach((m) => {
+      if (m.ubicacion) {
+        const marcador = L.marker([m.ubicacion.latitud, m.ubicacion.longitud], {
+          icon: iconoPreventista,
+        })
+          .addTo(mapaInstanciaRef.current)
+          .bindPopup(
+            `<b>${m.nombre}</b><br/>${
+              m.jornada_activa ? 'Jornada activa' : 'Sin jornada activa'
+            }${m.ubicacion.origen === 'en_vivo' ? '<br/>Ubicación en vivo' : '<br/>Ubicación de inicio de jornada'}`,
+          )
+        marcadoresRef.current.push(marcador)
+        puntos.push([m.ubicacion.latitud, m.ubicacion.longitud])
+      }
+    })
+
+    if (puntos.length) {
+      mapaInstanciaRef.current.fitBounds(puntos, { padding: [30, 30], maxZoom: 15 })
+    }
+  }, [monitoreoData])
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -279,6 +386,12 @@ export default function Preventistas() {
             className="border border-neutral-200 text-neutral-600 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-neutral-50"
           >
             {mostrarDireccion ? 'Ocultar dirección' : 'Mostrar dirección'}
+          </button>
+          <button
+            onClick={abrirMonitoreo}
+            className="border border-secondary text-secondary text-sm font-semibold px-4 py-2 rounded-lg hover:bg-secondary/10"
+          >
+            📍 Monitorear preventistas
           </button>
           <button
             onClick={exportarTodosGeneral}
@@ -659,6 +772,112 @@ export default function Preventistas() {
                   </table>
                 </div>
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal monitoreo */}
+      {monitoreoAbierto && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
+          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-primary">Monitoreo de preventistas</h2>
+              <button
+                onClick={cerrarMonitoreo}
+                className="text-neutral-400 hover:text-neutral-600 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold text-neutral-700">Mapa en tiempo real</p>
+                <p className="text-xs text-neutral-400">Se actualiza cada 30 segundos</p>
+              </div>
+              <div
+                ref={mapaContenedorRef}
+                className="w-full h-72 rounded-lg border border-neutral-200 z-0"
+              />
+            </div>
+
+            {monitoreoLoading ? (
+              <p className="text-neutral-400 text-center py-8">Cargando...</p>
+            ) : monitoreoData.length ? (
+              <div className="space-y-3">
+                {monitoreoData.map((m) => (
+                  <div key={m.id} className="border border-neutral-100 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="inline-block w-3 h-3 rounded-full border border-neutral-200"
+                          style={{ backgroundColor: m.color || '#2E4E9E' }}
+                        />
+                        <p className="font-semibold text-neutral-800">{m.nombre}</p>
+                      </div>
+                      <span
+                        className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${
+                          m.jornada_activa
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-neutral-100 text-neutral-500'
+                        }`}
+                      >
+                        {m.jornada_activa ? `Activo desde ${m.hora_inicio}` : 'Sin jornada activa'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-xs text-neutral-400 mb-1">Ruta de hoy</p>
+                        {m.ruta.tiene_ruta_hoy ? (
+                          <>
+                            <p className="text-neutral-700">
+                              {m.ruta.paradas_visitadas} de {m.ruta.total_paradas} paradas hechas
+                            </p>
+                            <div className="w-full bg-neutral-100 rounded-full h-2 overflow-hidden mt-1">
+                              <div
+                                className="h-2 rounded-full bg-secondary"
+                                style={{
+                                  width: `${
+                                    m.ruta.total_paradas > 0
+                                      ? Math.round((m.ruta.paradas_visitadas / m.ruta.total_paradas) * 100)
+                                      : 0
+                                  }%`,
+                                }}
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-neutral-400 italic">Sin ruta asignada hoy</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-neutral-400 mb-1">Última ubicación conocida</p>
+                        {m.ubicacion ? (
+                          <>
+                            <a href={`https://www.openstreetmap.org/?mlat=${m.ubicacion.latitud}&mlon=${m.ubicacion.longitud}#map=16/${m.ubicacion.latitud}/${m.ubicacion.longitud}`} target="_blank" rel="noopener noreferrer" className="text-secondary font-medium hover:underline">
+                              Ver en el mapa →
+                            </a>
+                            <p className="text-xs text-neutral-400 mt-1">
+                              {m.ubicacion.origen === 'en_vivo'
+                                ? m.ubicacion.reciente
+                                  ? 'Ubicación en vivo'
+                                  : 'Última ubicación en vivo (no reciente)'
+                                : 'Ubicación al iniciar jornada'}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-neutral-400 italic">Sin ubicación registrada</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-neutral-400 text-center py-8">No hay preventistas activos.</p>
             )}
           </div>
         </div>
