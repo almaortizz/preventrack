@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
+import '../services/ubicacion_service.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -53,6 +54,17 @@ class _JornadaScreenState extends State<JornadaScreen> {
           _isLoading = false;
         });
         _iniciarTimer();
+
+        // El reporte de ubicación en vivo lo maneja un servicio global
+        // (UbicacionService) que no depende de esta pantalla, así que
+        // sigue funcionando aunque la persona navegue a otra sección
+        // de la app. Aquí solo nos aseguramos de que esté encendido o
+        // apagado según si hay una jornada activa.
+        if (_estadoJornada == 'en_curso' || _estadoJornada == 'en_comida') {
+          UbicacionService.instancia.iniciar();
+        } else {
+          UbicacionService.instancia.detener();
+        }
       }
     } catch (e) {
       setState(() => _isLoading = false);
@@ -107,10 +119,19 @@ class _JornadaScreenState extends State<JornadaScreen> {
         final userData = jsonDecode(usuarioStr);
         usuarioId = userData['id'];
       }
-      final result = await _api.post(
-        'jornadas/iniciar',
-        body: {'usuario_id': usuarioId},
-      );
+
+      // Se intenta capturar la ubicación GPS antes de iniciar la jornada.
+      // Si no se puede obtener (GPS apagado, permiso negado, etc.), la
+      // jornada se inicia de todas formas sin ubicación.
+      final position = await UbicacionService.instancia.obtenerUbicacionActual();
+
+      final body = <String, dynamic>{'usuario_id': usuarioId};
+      if (position != null) {
+        body['latitud_inicio'] = position.latitude;
+        body['longitud_inicio'] = position.longitude;
+      }
+
+      final result = await _api.post('jornadas/iniciar', body: body);
       if (result['statusCode'] == 201 || result['statusCode'] == 200) {
         await _cargarJornada();
       } else {
@@ -189,6 +210,7 @@ class _JornadaScreenState extends State<JornadaScreen> {
       final result = await _api.post('jornadas/${_jornada!['id']}/finalizar');
       if (result['statusCode'] == 200) {
         _timer?.cancel();
+        UbicacionService.instancia.detener();
         await _cargarJornada();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

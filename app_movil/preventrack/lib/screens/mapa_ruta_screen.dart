@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_map/flutter_map.dart';
@@ -30,6 +32,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
   LatLng? _ubicacionActual;
   StreamSubscription<Position>? _positionStream;
   DateTime? _horaInicioRuta;
+  List<LatLng> _rutaCalles = [];
 
   @override
   void initState() {
@@ -78,9 +81,56 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
         );
         _visitadas = _paradas.where((p) => p['estado'] == 'visitada').length;
         _modoOffline = true;
+        _cargarRutaOSRM();
       }
     }
     setState(() => _isLoading = false);
+    _cargarRutaOSRM();
+  }
+
+  Future<void> _cargarRutaOSRM() async {
+    final puntos = <LatLng>[];
+
+    for (var parada in _paradas) {
+      final domicilio = parada['domicilio'];
+      if (domicilio == null) continue;
+      final lat = double.tryParse(domicilio['latitud']?.toString() ?? '');
+      final lng = double.tryParse(domicilio['longitud']?.toString() ?? '');
+      if (lat != null && lng != null) {
+        puntos.add(LatLng(lat, lng));
+      }
+    }
+
+    if (puntos.length < 2) return;
+
+    try {
+      final coords = puntos
+          .map((p) => '${p.longitude},${p.latitude}')
+          .join(';');
+      final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/$coords?overview=full&geometries=geojson',
+      );
+      final response = await http.get(url);
+
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(response.body);
+        final routes = data['routes'] as List<dynamic>?;
+        if (routes != null && routes.isNotEmpty) {
+          final coordinates =
+              routes[0]['geometry']['coordinates'] as List<dynamic>;
+          setState(() {
+            _rutaCalles = coordinates
+                .map(
+                  (c) => LatLng(
+                    (c[1] as num).toDouble(),
+                    (c[0] as num).toDouble(),
+                  ),
+                )
+                .toList();
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   // ═══════════════════════════════════════════
@@ -890,7 +940,19 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                             'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         userAgentPackageName: 'com.preventrack.app',
                       ),
-                      PolylineLayer(polylines: _buildRutaLinea()),
+                      PolylineLayer(
+                        polylines: _rutaCalles.isNotEmpty
+                            ? [
+                                Polyline(
+                                  points: _rutaCalles,
+                                  strokeWidth: 4,
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.7,
+                                  ),
+                                ),
+                              ]
+                            : _buildRutaLinea(),
+                      ),
                       MarkerLayer(markers: _buildMarkers()),
                     ],
                   ),
