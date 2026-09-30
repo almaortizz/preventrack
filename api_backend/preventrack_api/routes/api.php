@@ -51,6 +51,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('ventas/{venta}/marcar-no-entregado', [VentaController::class, 'marcarNoEntregado']);
     Route::post('ventas/{venta}/cancelar', [VentaController::class, 'cancelar']);
     Route::post('ventas/{venta}/marcar-impreso', [VentaController::class, 'marcarImpreso']);
+    Route::get('ventas/{venta}/remision', [\App\Http\Controllers\RemisionController::class, 'generar']);
+    Route::get('ventas/{venta}/remision-excel', [\App\Http\Controllers\RemisionController::class, 'excel']);
 
     Route::apiResource('cotizaciones', CotizacionController::class)->except(['destroy']);
     Route::delete('cotizaciones/{cotizacion}', [CotizacionController::class, 'destroy']);

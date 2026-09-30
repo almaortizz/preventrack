@@ -302,6 +302,41 @@ export default function Ventas() {
     return segundos >= 0 ? segundos : null
   }
 
+  async function imprimirRemisionPdf(venta) {
+    try {
+      const res = await client.get(`/ventas/${venta.id}/remision`, {
+        responseType: 'blob',
+      })
+      const blobUrl = window.URL.createObjectURL(
+        new Blob([res.data], { type: 'application/pdf' }),
+      )
+      window.open(blobUrl, '_blank')
+    } catch {
+      alert('No se pudo generar la remisión en PDF.')
+    }
+  }
+
+  async function descargarRemisionExcel(venta) {
+    try {
+      const res = await client.get(`/ventas/${venta.id}/remision-excel`, {
+        responseType: 'blob',
+      })
+      const nombreArchivo =
+        res.headers['content-disposition']?.match(/filename="?([^"]+)"?/)?.[1] ||
+        `remision_${venta.numero_orden}.xlsx`
+      const blobUrl = window.URL.createObjectURL(new Blob([res.data]))
+      const enlace = document.createElement('a')
+      enlace.href = blobUrl
+      enlace.download = nombreArchivo
+      document.body.appendChild(enlace)
+      enlace.click()
+      enlace.remove()
+      window.URL.revokeObjectURL(blobUrl)
+    } catch {
+      alert('No se pudo generar la remisión en Excel.')
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -422,6 +457,18 @@ export default function Ventas() {
                       className="text-neutral-600 font-medium hover:underline"
                     >
                       Detalles
+                    </button>
+                    <button
+                      onClick={() => imprimirRemisionPdf(v)}
+                      className="text-primary font-medium hover:underline"
+                    >
+                      Remisión (PDF)
+                    </button>
+                    <button
+                      onClick={() => descargarRemisionExcel(v)}
+                      className="text-primary font-medium hover:underline"
+                    >
+                      Remisión (Excel)
                     </button>
                     {v.estado === 'pendiente' && (
                       <>
@@ -789,7 +836,19 @@ export default function Ventas() {
               )}
             </div>
 
-            <div className="flex justify-end pt-4">
+            <div className="flex justify-end gap-3 pt-4">
+              <button
+                onClick={() => imprimirRemisionPdf(detalleAbierto)}
+                className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary/90"
+              >
+                🖨 Remisión (PDF)
+              </button>
+              <button
+                onClick={() => descargarRemisionExcel(detalleAbierto)}
+                className="bg-secondary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-secondary/90"
+              >
+                ⬇ Remisión (Excel)
+              </button>
               <button
                 onClick={cerrarDetalle}
                 className="px-4 py-2 rounded-lg text-neutral-600 hover:bg-neutral-100"
