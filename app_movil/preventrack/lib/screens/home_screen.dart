@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
+import '../services/ubicacion_service.dart';
 import 'dashboard_screen.dart';
 import 'dashboard_admin_screen.dart';
 import 'clientes_screen.dart';
@@ -19,6 +21,36 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _reanudarUbicacionSiHayJornadaActiva();
+  }
+
+  // Si la persona cierra y vuelve a abrir la app mientras ya tenía una
+  // jornada en curso, esto reactiva el reporte de ubicación en vivo
+  // sin que tenga que volver a entrar a la pantalla de Jornada Laboral.
+  Future<void> _reanudarUbicacionSiHayJornadaActiva() async {
+    try {
+      final result = await ApiService().get('jornadas');
+      if (result['statusCode'] != 200) return;
+
+      final data = result['data'];
+      final jornadas = data is List ? data : (data['data'] ?? []);
+
+      final hayActiva = jornadas.any(
+        (j) => j['hora_inicio'] != null && j['hora_fin'] == null,
+      );
+
+      if (hayActiva) {
+        UbicacionService.instancia.iniciar();
+      }
+    } catch (_) {
+      // Si falla, no pasa nada grave: se reintentará la próxima vez
+      // que se abra la pantalla de Jornada Laboral.
+    }
+  }
 
   bool _esAdmin(AuthProvider auth) {
     return auth.usuario?['rol_id'] == 1;
@@ -244,6 +276,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   onTap: () async {
                     Navigator.pop(context);
+                    UbicacionService.instancia.detener();
                     final authProvider = Provider.of<AuthProvider>(
                       context,
                       listen: false,
