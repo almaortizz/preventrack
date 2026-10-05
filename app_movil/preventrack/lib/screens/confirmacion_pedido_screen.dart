@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../config/app_theme.dart';
+import '../services/print_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 
 class ConfirmacionPedidoScreen extends StatelessWidget {
   final Map<String, dynamic> venta;
@@ -14,7 +17,7 @@ class ConfirmacionPedidoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final numeroOrden = venta['numero_orden'] ?? 'N/A';
+    final numeroOrden = (venta['numero_orden'] ?? 'N/A').toString();
     final fechaHoy = DateFormat(
       "d 'de' MMMM 'de' yyyy",
       'es',
@@ -194,14 +197,26 @@ class ConfirmacionPedidoScreen extends StatelessWidget {
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton.icon(
-                        onPressed: () {
-                          // TODO: imprimir ticket bluetooth
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Función de impresión Bluetooth próximamente',
-                              ),
-                            ),
+                        onPressed: () async {
+                          final auth = Provider.of<AuthProvider>(
+                            context,
+                            listen: false,
+                          );
+                          final nombre =
+                              auth.usuario?['nombre'] ?? 'Preventista';
+
+                          // Completar domicilio.cliente si la API no lo devolvió
+                          final ventaTicket = Map<String, dynamic>.from(venta);
+                          final domicilio = Map<String, dynamic>.from(
+                            ventaTicket['domicilio'] ?? {},
+                          );
+                          domicilio['cliente'] ??= cliente;
+                          ventaTicket['domicilio'] = domicilio;
+
+                          await PrintService.mostrarDialogoImpresora(
+                            context,
+                            venta: ventaTicket,
+                            preventistaNombre: nombre,
                           );
                         },
                         icon: const Icon(Icons.print_outlined, size: 20),

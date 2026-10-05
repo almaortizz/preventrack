@@ -44,7 +44,9 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar entrega'),
-        content: const Text('¿Confirmas que el pedido fue entregado al cliente?'),
+        content: const Text(
+          '¿Confirmas que el pedido fue entregado al cliente?',
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         actions: [
           TextButton(
@@ -70,7 +72,9 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
 
     setState(() => _procesando = true);
     try {
-      final result = await _api.post('ventas/${widget.ventaId}/marcar-entregado');
+      final result = await _api.post(
+        'ventas/${widget.ventaId}/marcar-entregado',
+      );
       if (!mounted) return;
 
       if (result['statusCode'] == 200) {
@@ -132,7 +136,9 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
 
     setState(() => _procesando = true);
     try {
-      final result = await _api.post('ventas/${widget.ventaId}/marcar-no-entregado');
+      final result = await _api.post(
+        'ventas/${widget.ventaId}/marcar-no-entregado',
+      );
       if (!mounted) return;
 
       if (result['statusCode'] == 200) {
@@ -192,8 +198,8 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
               child: CircularProgressIndicator(color: AppColors.primary),
             )
           : _venta == null
-              ? const Center(child: Text('No se pudo cargar el pedido'))
-              : _buildContenido(),
+          ? const Center(child: Text('No se pudo cargar el pedido'))
+          : _buildContenido(),
     );
   }
 
@@ -244,7 +250,9 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
                             width: 40,
                             height: 40,
                             decoration: BoxDecoration(
-                              color: AppColors.secondary.withValues(alpha: 0.08),
+                              color: AppColors.secondary.withValues(
+                                alpha: 0.08,
+                              ),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
@@ -271,7 +279,9 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
                                   numero,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: AppColors.textPrimary.withValues(alpha: 0.45),
+                                    color: AppColors.textPrimary.withValues(
+                                      alpha: 0.45,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -295,7 +305,9 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
                               direccion,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: AppColors.textPrimary.withValues(alpha: 0.6),
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.6,
+                                ),
                               ),
                             ),
                           ),
@@ -308,14 +320,18 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
                             Icon(
                               Icons.phone_outlined,
                               size: 16,
-                              color: AppColors.textPrimary.withValues(alpha: 0.4),
+                              color: AppColors.textPrimary.withValues(
+                                alpha: 0.4,
+                              ),
                             ),
                             const SizedBox(width: 6),
                             Text(
                               telefono,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: AppColors.textPrimary.withValues(alpha: 0.6),
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.6,
+                                ),
                               ),
                             ),
                           ],
@@ -352,7 +368,9 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
                           'Sin detalle de productos',
                           style: TextStyle(
                             fontSize: 13,
-                            color: AppColors.textPrimary.withValues(alpha: 0.45),
+                            color: AppColors.textPrimary.withValues(
+                              alpha: 0.45,
+                            ),
                           ),
                         )
                       else
@@ -371,7 +389,8 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         nombre,
@@ -385,7 +404,8 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
                                         '$cantidad x \$$precioUnitario',
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: AppColors.textPrimary.withValues(alpha: 0.45),
+                                          color: AppColors.textPrimary
+                                              .withValues(alpha: 0.45),
                                         ),
                                       ),
                                     ],
@@ -414,7 +434,9 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
                               'Descuento',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: AppColors.textPrimary.withValues(alpha: 0.5),
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.5,
+                                ),
                               ),
                             ),
                             Text(
@@ -458,81 +480,6 @@ class _DetalleEntregaScreenState extends State<DetalleEntregaScreen> {
             ),
           ),
         ),
-
-        // Botones de acción (solo si está en_ruta)
-        if (estado == 'en_ruta')
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              border: Border(
-                top: BorderSide(
-                  color: AppColors.cardBorder.withValues(alpha: 0.5),
-                ),
-              ),
-            ),
-            child: Column(
-              children: [
-                // Botón Registrar Entrega
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    onPressed: _procesando ? null : _marcarEntregado,
-                    icon: _procesando
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.check_circle_outline, size: 20),
-                    label: Text(
-                      _procesando ? 'Procesando...' : 'Registrar Entrega',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.success,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                // Botón Marcar No Entregado
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: _procesando ? null : _marcarNoEntregado,
-                    icon: const Icon(Icons.cancel_outlined, size: 20),
-                    label: const Text(
-                      'Marcar No Entregado',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                      side: const BorderSide(color: AppColors.error),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
       ],
     );
   }

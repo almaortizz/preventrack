@@ -133,11 +133,45 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
     } catch (_) {}
   }
 
+  Future<bool> _tieneJornadaActiva() async {
+    try {
+      final result = await _api.get('jornadas');
+      if (result['statusCode'] == 200) {
+        final jornadas = result['data'] is List
+            ? result['data']
+            : (result['data']['data'] ?? []);
+        final hoy = DateTime.now().toIso8601String().substring(0, 10);
+        return jornadas.any(
+          (j) =>
+              j['fecha'] == hoy &&
+              j['hora_inicio'] != null &&
+              j['hora_fin'] == null,
+        );
+      }
+    } catch (_) {
+      return true;
+    }
+    return false;
+  }
+
   // ═══════════════════════════════════════════
   //  INICIAR / FINALIZAR RUTA
   // ═══════════════════════════════════════════
 
   Future<void> _iniciarRuta() async {
+    // Verificar jornada activa
+    final jornadaActiva = await _tieneJornadaActiva();
+    if (!jornadaActiva) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debes iniciar tu jornada laboral primero'),
+          backgroundColor: AppColors.warning,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
     if (kIsWeb) {
       setState(() {
         _rutaIniciada = true;
@@ -448,7 +482,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
       final paradaId = parada['id'];
 
       final esVisitada = estado == 'visitada';
-      final color = esVisitada ? AppColors.success : AppColors.warning;
+      final color = esVisitada ? AppColors.success : AppColors.secondary;
 
       markers.add(
         Marker(
@@ -548,7 +582,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                   decoration: BoxDecoration(
                     color: esVisitada
                         ? AppColors.success.withValues(alpha: 0.1)
-                        : AppColors.warning.withValues(alpha: 0.1),
+                        : AppColors.secondary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
@@ -563,7 +597,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.warning,
+                              color: AppColors.secondary,
                             ),
                           ),
                   ),
@@ -589,7 +623,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                         decoration: BoxDecoration(
                           color: esVisitada
                               ? AppColors.success.withValues(alpha: 0.1)
-                              : AppColors.warning.withValues(alpha: 0.1),
+                              : AppColors.secondary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -601,7 +635,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                             fontWeight: FontWeight.w600,
                             color: esVisitada
                                 ? AppColors.success
-                                : AppColors.warning,
+                                : AppColors.secondary,
                           ),
                         ),
                       ),
@@ -770,256 +804,264 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
     final totalParadas = _paradas.length;
     final progreso = totalParadas > 0 ? _visitadas / totalParadas : 0.0;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text(
-          'Ruta de Visitas',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: AppColors.primary,
-            fontSize: 18,
+    return PopScope(
+      canPop: !_rutaIniciada,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _rutaIniciada) {
+          _finalizarRuta();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text(
+            'Ruta de Visitas',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+              fontSize: 18,
+            ),
+          ),
+          backgroundColor: AppColors.white,
+          foregroundColor: AppColors.primary,
+          elevation: 0,
+          surfaceTintColor: AppColors.white,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (_rutaIniciada) {
+                _finalizarRuta();
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(
+              color: AppColors.cardBorder.withValues(alpha: 0.5),
+              height: 1,
+            ),
           ),
         ),
-        backgroundColor: AppColors.white,
-        foregroundColor: AppColors.primary,
-        elevation: 0,
-        surfaceTintColor: AppColors.white,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (_rutaIniciada) {
-              _finalizarRuta();
-            } else {
-              Navigator.pop(context);
-            }
-          },
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            color: AppColors.cardBorder.withValues(alpha: 0.5),
-            height: 1,
-          ),
-        ),
-      ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            )
-          : _ruta == null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.map_outlined,
-                    size: 64,
-                    color: AppColors.textPrimary.withValues(alpha: 0.2),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No hay ruta asignada para hoy',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: AppColors.textPrimary.withValues(alpha: 0.5),
+        body: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              )
+            : _ruta == null
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.map_outlined,
+                      size: 64,
+                      color: AppColors.textPrimary.withValues(alpha: 0.2),
                     ),
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: [
-                // Info de ruta + progreso
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  color: AppColors.white,
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _rutaIniciada
-                                      ? 'Ruta en curso'
-                                      : 'Progreso de ruta',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: _rutaIniciada
-                                        ? AppColors.success
-                                        : AppColors.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '$_visitadas de $totalParadas paradas visitadas',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textPrimary.withValues(
-                                      alpha: 0.5,
+                    const SizedBox(height: 12),
+                    Text(
+                      'No hay ruta asignada para hoy',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textPrimary.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : Column(
+                children: [
+                  // Info de ruta + progreso
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    color: AppColors.white,
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _rutaIniciada
+                                        ? 'Ruta en curso'
+                                        : 'Progreso de ruta',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: _rutaIniciada
+                                          ? AppColors.success
+                                          : AppColors.textPrimary,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (_rutaIniciada)
-                            Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: AppColors.success,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.success.withValues(
-                                      alpha: 0.5,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '$_visitadas de $totalParadas paradas visitadas',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textPrimary.withValues(
+                                        alpha: 0.5,
+                                      ),
                                     ),
-                                    blurRadius: 6,
-                                    spreadRadius: 1,
                                   ),
                                 ],
                               ),
                             ),
-                          if (_rutaIniciada) const SizedBox(width: 8),
-                          Text(
-                            '${(progreso * 100).toInt()}%',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
+                            if (_rutaIniciada)
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: AppColors.success,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.success.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                      blurRadius: 6,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (_rutaIniciada) const SizedBox(width: 8),
+                            Text(
+                              '${(progreso * 100).toInt()}%',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: progreso,
-                          minHeight: 8,
-                          backgroundColor: AppColors.cardBorder,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.success,
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: progreso,
+                            minHeight: 8,
+                            backgroundColor: AppColors.cardBorder,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              AppColors.success,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (_rutaIniciada) ...[
-                            _buildLeyenda('Tú', Colors.blue),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (_rutaIniciada) ...[
+                              _buildLeyenda('Tú', Colors.blue),
+                              const SizedBox(width: 16),
+                            ],
+                            _buildLeyenda('Visitada', AppColors.success),
                             const SizedBox(width: 16),
+                            _buildLeyenda('Pendiente', AppColors.secondary),
                           ],
-                          _buildLeyenda('Visitada', AppColors.success),
-                          const SizedBox(width: 16),
-                          _buildLeyenda('Pendiente', AppColors.warning),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Mapa
-                Expanded(
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: _getCentro(),
-                      initialZoom: 15,
+                        ),
+                      ],
                     ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.preventrack.app',
+                  ),
+
+                  // Mapa
+                  Expanded(
+                    child: FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: _getCentro(),
+                        initialZoom: 15,
                       ),
-                      PolylineLayer(
-                        polylines: _rutaCalles.isNotEmpty
-                            ? [
-                                Polyline(
-                                  points: _rutaCalles,
-                                  strokeWidth: 4,
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.7,
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.preventrack.app',
+                        ),
+                        PolylineLayer(
+                          polylines: _rutaCalles.isNotEmpty
+                              ? [
+                                  Polyline(
+                                    points: _rutaCalles,
+                                    strokeWidth: 4,
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.7,
+                                    ),
                                   ),
-                                ),
-                              ]
-                            : _buildRutaLinea(),
-                      ),
-                      MarkerLayer(markers: _buildMarkers()),
-                    ],
-                  ),
-                ),
-
-                // Botón Iniciar / Finalizar ruta
-                Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    border: Border(
-                      top: BorderSide(
-                        color: AppColors.cardBorder.withValues(alpha: 0.5),
-                      ),
+                                ]
+                              : _buildRutaLinea(),
+                        ),
+                        MarkerLayer(markers: _buildMarkers()),
+                      ],
                     ),
                   ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: _rutaIniciada
-                        ? OutlinedButton.icon(
-                            onPressed: _finalizarRuta,
-                            icon: const Icon(
-                              Icons.stop_circle_outlined,
-                              size: 20,
-                            ),
-                            label: const Text(
-                              'Finalizar ruta',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+
+                  // Botón Iniciar / Finalizar ruta
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      border: Border(
+                        top: BorderSide(
+                          color: AppColors.cardBorder.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: _rutaIniciada
+                          ? OutlinedButton.icon(
+                              onPressed: _finalizarRuta,
+                              icon: const Icon(
+                                Icons.stop_circle_outlined,
+                                size: 20,
+                              ),
+                              label: const Text(
+                                'Finalizar ruta',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.error,
+                                side: const BorderSide(color: AppColors.error),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            )
+                          : ElevatedButton.icon(
+                              onPressed: _iniciarRuta,
+                              icon: const Icon(
+                                Icons.play_circle_outline,
+                                size: 20,
+                              ),
+                              label: const Text(
+                                'Iniciar ruta',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
                               ),
                             ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.error,
-                              side: const BorderSide(color: AppColors.error),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          )
-                        : ElevatedButton.icon(
-                            onPressed: _iniciarRuta,
-                            icon: const Icon(
-                              Icons.play_circle_outline,
-                              size: 20,
-                            ),
-                            label: const Text(
-                              'Iniciar ruta',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 0,
-                            ),
-                          ),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+      ),
     );
   }
 
