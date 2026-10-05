@@ -257,20 +257,10 @@ class _EntregasScreenState extends State<EntregasScreen> {
               ),
             ),
             // Botón entregar
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'Entregar',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.success,
-                ),
-              ),
+            Icon(
+              Icons.chevron_right,
+              color: AppColors.textPrimary.withValues(alpha: 0.25),
+              size: 20,
             ),
           ],
         ),

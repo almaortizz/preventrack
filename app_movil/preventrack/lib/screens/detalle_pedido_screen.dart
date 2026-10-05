@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
+import '../services/print_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 
 class DetallePedidoScreen extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -404,13 +407,17 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton.icon(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Funcion de impresion Bluetooth proximamente',
-                              ),
-                            ),
+                        onPressed: () async {
+                          final auth = Provider.of<AuthProvider>(
+                            context,
+                            listen: false,
+                          );
+                          final nombre =
+                              auth.usuario?['nombre'] ?? 'Preventista';
+                          await PrintService.mostrarDialogoImpresora(
+                            context,
+                            venta: widget.pedido,
+                            preventistaNombre: nombre,
                           );
                         },
                         icon: const Icon(Icons.print_outlined, size: 20),

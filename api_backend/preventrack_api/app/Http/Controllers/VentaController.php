@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Producto;
+use App\Models\RegistroGps;
 use App\Models\Venta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -158,8 +159,14 @@ class VentaController extends Controller
     }
 
     // Marcar el pedido como entregado (en_ruta -> entregado)
-    public function marcarEntregado(Venta $venta)
+    public function marcarEntregado(Request $request, Venta $venta)
     {
+        $request->validate([
+            'latitud'   => 'nullable|numeric|between:-90,90',
+            'longitud'  => 'nullable|numeric|between:-180,180',
+            'precision' => 'nullable|numeric|min:0',
+        ]);
+
         if ($venta->estado !== 'en_ruta') {
             throw ValidationException::withMessages([
                 'estado' => ['Solo se puede entregar un pedido que está en ruta.'],
@@ -172,12 +179,23 @@ class VentaController extends Controller
             'hora_entrega' => now()->toTimeString(),
         ]);
 
+        // Guardar dónde estaba el preventista al entregar
+        RegistroGps::desdeRequest($request, 'entrega', $venta->domicilio, [
+            'venta_id' => $venta->id,
+        ]);
+
         return response()->json($venta);
     }
 
     // El cliente no recibió el pedido: regresa a "pendiente" para reprogramar
-    public function marcarNoEntregado(Venta $venta)
+    public function marcarNoEntregado(Request $request, Venta $venta)
     {
+        $request->validate([
+            'latitud'   => 'nullable|numeric|between:-90,90',
+            'longitud'  => 'nullable|numeric|between:-180,180',
+            'precision' => 'nullable|numeric|min:0',
+        ]);
+
         if ($venta->estado !== 'en_ruta') {
             throw ValidationException::withMessages([
                 'estado' => ['Solo un pedido en ruta puede regresar a pendiente.'],
@@ -185,6 +203,11 @@ class VentaController extends Controller
         }
 
         $venta->update(['estado' => 'pendiente']);
+
+        // Guardar dónde estaba el preventista al reportar que no se entregó
+        RegistroGps::desdeRequest($request, 'no_entregado', $venta->domicilio, [
+            'venta_id' => $venta->id,
+        ]);
 
         return response()->json($venta);
     }

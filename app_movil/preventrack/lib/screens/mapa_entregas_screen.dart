@@ -25,6 +25,7 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
 
   bool _rutaIniciada = false;
   LatLng? _ubicacionActual;
+  Position? _ultimaPosicion; // Guarda precisión y hora de la última lectura GPS
   StreamSubscription<Position>? _positionStream;
 
   late List<dynamic> _entregas;
@@ -112,6 +113,27 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
     if (mounted) setState(() => _cargandoRuta = false);
   }
 
+  Future<bool> _tieneJornadaActiva() async {
+    try {
+      final result = await _api.get('jornadas');
+      if (result['statusCode'] == 200) {
+        final jornadas = result['data'] is List
+            ? result['data']
+            : (result['data']['data'] ?? []);
+        final hoy = DateTime.now().toIso8601String().substring(0, 10);
+        return jornadas.any(
+          (j) =>
+              j['fecha'] == hoy &&
+              j['hora_inicio'] != null &&
+              j['hora_fin'] == null,
+        );
+      }
+    } catch (_) {
+      return true;
+    }
+    return false;
+  }
+
   // ═══════════════════════════════════════════
   //  GOOGLE MAPS — CÓMO LLEGAR
   // ═══════════════════════════════════════════
@@ -189,6 +211,19 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
   // ═══════════════════════════════════════════
 
   Future<void> _iniciarRuta() async {
+    // Verificar jornada activa
+    final jornadaActiva = await _tieneJornadaActiva();
+    if (!jornadaActiva) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debes iniciar tu jornada laboral primero'),
+          backgroundColor: AppColors.warning,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
     if (kIsWeb) {
       setState(() => _rutaIniciada = true);
       return;
@@ -244,6 +279,7 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
 
       setState(() {
         _ubicacionActual = LatLng(position.latitude, position.longitude);
+        _ultimaPosicion = position;
         _rutaIniciada = true;
       });
 
@@ -262,6 +298,7 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
                   position.latitude,
                   position.longitude,
                 );
+                _ultimaPosicion = position;
               });
             }
           });
@@ -309,6 +346,7 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
               setState(() {
                 _rutaIniciada = false;
                 _ubicacionActual = null;
+                _ultimaPosicion = null;
               });
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -328,6 +366,61 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
             child: const Text('Finalizar'),
           ),
         ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════
+  //  GPS AL REGISTRAR
+  // ═══════════════════════════════════════════
+
+  /// Devuelve las coordenadas del preventista para enviarlas a la API,
+  /// o null si no se pudo obtener una ubicación.
+  Future<Map<String, dynamic>?> _obtenerUbicacionRegistro() async {
+    // 1. Si el stream de la ruta tiene una lectura reciente (< 30 s), usarla
+    final ultima = _ultimaPosicion;
+    if (ultima != null &&
+        DateTime.now().difference(ultima.timestamp).inSeconds < 30) {
+      return _posicionAMapa(ultima);
+    }
+
+    // 2. Si no, pedir una lectura nueva
+    try {
+      final permiso = await Geolocator.checkPermission();
+      if (permiso == LocationPermission.denied ||
+          permiso == LocationPermission.deniedForever) {
+        return null;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      _ultimaPosicion = position;
+      return _posicionAMapa(position);
+    } catch (_) {
+      // 3. Último recurso: última posición conocida (no disponible en web)
+      if (kIsWeb) return null;
+      final conocida = await Geolocator.getLastKnownPosition();
+      return conocida != null ? _posicionAMapa(conocida) : null;
+    }
+  }
+
+  Map<String, dynamic> _posicionAMapa(Position p) => {
+    'latitud': p.latitude,
+    'longitud': p.longitude,
+    'precision': p.accuracy, // metros
+  };
+
+  void _avisarSinGps() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'No se pudo obtener tu ubicación. Activa el GPS e inténtalo de nuevo.',
+        ),
+        backgroundColor: AppColors.error,
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -367,8 +460,19 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
 
     if (confirmar != true) return;
 
+    // Capturar GPS antes de enviar (requisito anti-fraude)
+    final ubicacion = await _obtenerUbicacionRegistro();
+    if (!mounted) return;
+    if (ubicacion == null && !kIsWeb) {
+      _avisarSinGps();
+      return;
+    }
+
     try {
-      final result = await _api.post('ventas/$ventaId/marcar-entregado');
+      final result = await _api.post(
+        'ventas/$ventaId/marcar-entregado',
+        body: ubicacion,
+      );
       if (!mounted) return;
 
       if (result['statusCode'] == 200) {
@@ -438,8 +542,19 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
 
     if (confirmar != true) return;
 
+    // Capturar GPS antes de enviar (requisito anti-fraude)
+    final ubicacion = await _obtenerUbicacionRegistro();
+    if (!mounted) return;
+    if (ubicacion == null && !kIsWeb) {
+      _avisarSinGps();
+      return;
+    }
+
     try {
-      final result = await _api.post('ventas/$ventaId/marcar-no-entregado');
+      final result = await _api.post(
+        'ventas/$ventaId/marcar-no-entregado',
+        body: ubicacion,
+      );
       if (!mounted) return;
 
       if (result['statusCode'] == 200) {
@@ -644,349 +759,359 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
     final total = entregasUbicadas.length;
     final progreso = total > 0 ? _entregadas / total : 0.0;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text(
-          'Ruta de Entregas',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: AppColors.primary,
-            fontSize: 18,
+    return PopScope(
+      canPop: !_rutaIniciada,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _rutaIniciada) {
+          _finalizarRuta();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text(
+            'Ruta de Entregas',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+              fontSize: 18,
+            ),
+          ),
+          backgroundColor: AppColors.white,
+          foregroundColor: AppColors.primary,
+          elevation: 0,
+          surfaceTintColor: AppColors.white,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (_rutaIniciada) {
+                _finalizarRuta();
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(
+              color: AppColors.cardBorder.withValues(alpha: 0.5),
+              height: 1,
+            ),
           ),
         ),
-        backgroundColor: AppColors.white,
-        foregroundColor: AppColors.primary,
-        elevation: 0,
-        surfaceTintColor: AppColors.white,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (_rutaIniciada) {
-              _finalizarRuta();
-            } else {
-              Navigator.pop(context);
-            }
-          },
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            color: AppColors.cardBorder.withValues(alpha: 0.5),
-            height: 1,
-          ),
-        ),
-      ),
-      body: entregasUbicadas.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+        body: entregasUbicadas.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.location_off_outlined,
+                      size: 64,
+                      color: AppColors.textPrimary.withValues(alpha: 0.2),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No hay entregas con ubicación',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textPrimary.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Los clientes no tienen coordenadas registradas',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textPrimary.withValues(alpha: 0.35),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : Column(
                 children: [
-                  Icon(
-                    Icons.location_off_outlined,
-                    size: 64,
-                    color: AppColors.textPrimary.withValues(alpha: 0.2),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No hay entregas con ubicación',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: AppColors.textPrimary.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Los clientes no tienen coordenadas registradas',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textPrimary.withValues(alpha: 0.35),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: [
-                // Info + progreso
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  color: AppColors.white,
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _rutaIniciada
-                                      ? 'Ruta en curso'
-                                      : 'Entregas pendientes',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: _rutaIniciada
-                                        ? AppColors.success
-                                        : AppColors.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '$_entregadas de $total entregas completadas',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textPrimary.withValues(
-                                      alpha: 0.5,
-                                    ),
-                                  ),
-                                ),
-                                if (sinUbicacion > 0)
+                  // Info + progreso
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    color: AppColors.white,
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Text(
-                                    '$sinUbicacion sin coordenadas',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.warning,
+                                    _rutaIniciada
+                                        ? 'Ruta en curso'
+                                        : 'Entregas pendientes',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: _rutaIniciada
+                                          ? AppColors.success
+                                          : AppColors.textPrimary,
                                     ),
                                   ),
-                              ],
-                            ),
-                          ),
-                          if (_rutaIniciada)
-                            Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: AppColors.success,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.success.withValues(
-                                      alpha: 0.5,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '$_entregadas de $total entregas completadas',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textPrimary.withValues(
+                                        alpha: 0.5,
+                                      ),
                                     ),
-                                    blurRadius: 6,
-                                    spreadRadius: 1,
                                   ),
+                                  if (sinUbicacion > 0)
+                                    Text(
+                                      '$sinUbicacion sin coordenadas',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.warning,
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
-                          if (_rutaIniciada) const SizedBox(width: 8),
-                          Text(
-                            '${(progreso * 100).toInt()}%',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: progreso,
-                          minHeight: 8,
-                          backgroundColor: AppColors.cardBorder,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.success,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (_rutaIniciada) ...[
-                            _buildLeyenda('Tú', Colors.blue),
-                            const SizedBox(width: 16),
-                          ],
-                          _buildLeyenda('Entregado', AppColors.success),
-                          const SizedBox(width: 16),
-                          _buildLeyenda('Pendiente', AppColors.secondary),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Mapa
-                Expanded(
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: _getCentro(entregasUbicadas),
-                      initialZoom: 13,
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.preventrack.app',
-                      ),
-                      // Línea de ruta por calles (OSRM)
-                      if (_rutaCalles.isNotEmpty)
-                        PolylineLayer(
-                          polylines: [
-                            Polyline(
-                              points: _rutaCalles,
-                              strokeWidth: 4,
-                              color: AppColors.primary.withValues(alpha: 0.7),
-                            ),
-                          ],
-                        ),
-                      // Marcadores
-                      MarkerLayer(
-                        markers: [
-                          // Punto azul
-                          if (_rutaIniciada && _ubicacionActual != null)
-                            Marker(
-                              point: _ubicacionActual!,
-                              width: 28,
-                              height: 28,
-                              child: Container(
+                            if (_rutaIniciada)
+                              Container(
+                                width: 10,
+                                height: 10,
                                 decoration: BoxDecoration(
-                                  color: Colors.blue,
+                                  color: AppColors.success,
                                   shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 3,
-                                  ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.blue.withValues(alpha: 0.4),
-                                      blurRadius: 10,
-                                      spreadRadius: 3,
+                                      color: AppColors.success.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                      blurRadius: 6,
+                                      spreadRadius: 1,
                                     ),
                                   ],
                                 ),
                               ),
-                            ),
-                          // Entregas
-                          ...entregasUbicadas.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final entrega = entry.value;
-                            final esEntregado =
-                                entrega['estado'] == 'entregado';
-                            final color = esEntregado
-                                ? AppColors.success
-                                : AppColors.secondary;
-
-                            return Marker(
-                              point: LatLng(
-                                entrega['lat'] as double,
-                                entrega['lng'] as double,
+                            if (_rutaIniciada) const SizedBox(width: 8),
+                            Text(
+                              '${(progreso * 100).toInt()}%',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
                               ),
-                              width: 44,
-                              height: 44,
-                              child: GestureDetector(
-                                onTap: () => _mostrarInfoEntrega(entrega),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: progreso,
+                            minHeight: 8,
+                            backgroundColor: AppColors.cardBorder,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              AppColors.success,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (_rutaIniciada) ...[
+                              _buildLeyenda('Tú', Colors.blue),
+                              const SizedBox(width: 16),
+                            ],
+                            _buildLeyenda('Entregado', AppColors.success),
+                            const SizedBox(width: 16),
+                            _buildLeyenda('Pendiente', AppColors.secondary),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Mapa
+                  Expanded(
+                    child: FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: _getCentro(entregasUbicadas),
+                        initialZoom: 13,
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.preventrack.app',
+                        ),
+                        // Línea de ruta por calles (OSRM)
+                        if (_rutaCalles.isNotEmpty)
+                          PolylineLayer(
+                            polylines: [
+                              Polyline(
+                                points: _rutaCalles,
+                                strokeWidth: 4,
+                                color: AppColors.primary.withValues(alpha: 0.7),
+                              ),
+                            ],
+                          ),
+                        // Marcadores
+                        MarkerLayer(
+                          markers: [
+                            // Punto azul
+                            if (_rutaIniciada && _ubicacionActual != null)
+                              Marker(
+                                point: _ubicacionActual!,
+                                width: 28,
+                                height: 28,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: color,
+                                    color: Colors.blue,
                                     shape: BoxShape.circle,
                                     border: Border.all(
                                       color: Colors.white,
-                                      width: 2,
+                                      width: 3,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: color.withValues(alpha: 0.4),
-                                        blurRadius: 6,
-                                        offset: const Offset(0, 2),
+                                        color: Colors.blue.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                        blurRadius: 10,
+                                        spreadRadius: 3,
                                       ),
                                     ],
                                   ),
-                                  child: Center(
-                                    child: esEntregado
-                                        ? const Icon(
-                                            Icons.check,
-                                            color: Colors.white,
-                                            size: 20,
-                                          )
-                                        : Text(
-                                            '${index + 1}',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                  ),
                                 ),
                               ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                            // Entregas
+                            ...entregasUbicadas.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final entrega = entry.value;
+                              final esEntregado =
+                                  entrega['estado'] == 'entregado';
+                              final color = esEntregado
+                                  ? AppColors.success
+                                  : AppColors.secondary;
 
-                // Botón Iniciar / Finalizar
-                Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    border: Border(
-                      top: BorderSide(
-                        color: AppColors.cardBorder.withValues(alpha: 0.5),
-                      ),
+                              return Marker(
+                                point: LatLng(
+                                  entrega['lat'] as double,
+                                  entrega['lng'] as double,
+                                ),
+                                width: 44,
+                                height: 44,
+                                child: GestureDetector(
+                                  onTap: () => _mostrarInfoEntrega(entrega),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: color,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: color.withValues(alpha: 0.4),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: esEntregado
+                                          ? const Icon(
+                                              Icons.check,
+                                              color: Colors.white,
+                                              size: 20,
+                                            )
+                                          : Text(
+                                              '${index + 1}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: _rutaIniciada
-                        ? OutlinedButton.icon(
-                            onPressed: _finalizarRuta,
-                            icon: const Icon(
-                              Icons.stop_circle_outlined,
-                              size: 20,
-                            ),
-                            label: const Text(
-                              'Finalizar ruta',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+
+                  // Botón Iniciar / Finalizar
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      border: Border(
+                        top: BorderSide(
+                          color: AppColors.cardBorder.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: _rutaIniciada
+                          ? OutlinedButton.icon(
+                              onPressed: _finalizarRuta,
+                              icon: const Icon(
+                                Icons.stop_circle_outlined,
+                                size: 20,
+                              ),
+                              label: const Text(
+                                'Finalizar ruta',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.error,
+                                side: const BorderSide(color: AppColors.error),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            )
+                          : ElevatedButton.icon(
+                              onPressed: _iniciarRuta,
+                              icon: const Icon(
+                                Icons.play_circle_outline,
+                                size: 20,
+                              ),
+                              label: const Text(
+                                'Iniciar ruta de entregas',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.secondary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
                               ),
                             ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.error,
-                              side: const BorderSide(color: AppColors.error),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          )
-                        : ElevatedButton.icon(
-                            onPressed: _iniciarRuta,
-                            icon: const Icon(
-                              Icons.play_circle_outline,
-                              size: 20,
-                            ),
-                            label: const Text(
-                              'Iniciar ruta de entregas',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.secondary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 0,
-                            ),
-                          ),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+      ),
     );
   }
 
