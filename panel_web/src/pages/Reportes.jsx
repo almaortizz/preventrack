@@ -11,6 +11,8 @@ export default function Reportes() {
   const [fechaInicioJornadas, setFechaInicioJornadas] = useState('')
   const [fechaFinJornadas, setFechaFinJornadas] = useState('')
 
+  const [fechaHojaPedidos, setFechaHojaPedidos] = useState('')
+
   async function descargar(clave, url, params = {}) {
     setError('')
     setDescargando(clave)
@@ -128,6 +130,35 @@ export default function Reportes() {
             className="w-full bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
           >
             {descargando === 'reporte_comisiones' ? 'Descargando...' : 'Descargar Excel'}
+          </button>
+        </div>
+
+        {/* Hoja de pedidos del día */}
+        <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-5">
+          <h2 className="font-bold text-neutral-800 mb-1">Hoja de pedidos del día</h2>
+          <p className="text-sm text-neutral-500 mb-4">
+            Junta todos los pedidos de un día en una sola hoja, agrupados por cliente, con zona y
+            columna de proveedor para llenar a mano.
+          </p>
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-neutral-600 mb-1">Fecha</label>
+            <input
+              type="date"
+              value={fechaHojaPedidos}
+              onChange={(e) => setFechaHojaPedidos(e.target.value)}
+              className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
+            />
+          </div>
+          <button
+            onClick={() =>
+              descargar('hoja_pedidos', '/reportes/hoja-pedidos', {
+                fecha: fechaHojaPedidos || undefined,
+              })
+            }
+            disabled={descargando === 'hoja_pedidos' || !fechaHojaPedidos}
+            className="w-full bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
+          >
+            {descargando === 'hoja_pedidos' ? 'Descargando...' : 'Descargar Excel'}
           </button>
         </div>
 

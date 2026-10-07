@@ -9,5 +9,5 @@ class ApiConfig {
   }
 
   // Ruta base de las imágenes de productos (storage público del backend).
-  static String get storageUrl => 'http://127.0.0.1:8000/storage';
+  static String get storageUrl => 'http://127.0.0.1:8000/api/imagenes';
 }

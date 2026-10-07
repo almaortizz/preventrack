@@ -21,8 +21,14 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _crearTablas,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // v2: se guarda la imagen del producto para el modo sin conexión.
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE productos ADD COLUMN imagen TEXT');
+        }
+      },
     );
   }
 
@@ -49,7 +55,8 @@ class DatabaseService {
         precio_venta REAL,
         categoria_id INTEGER,
         categoria_nombre TEXT,
-        estado TEXT DEFAULT 'activo'
+        estado TEXT DEFAULT 'activo',
+        imagen TEXT
       )
     ''');
 
@@ -145,6 +152,7 @@ class DatabaseService {
           'categoria_id': producto['categoria_id'],
           'categoria_nombre': categoria != null ? categoria['nombre'] : null,
           'estado': producto['estado'],
+          'imagen': producto['imagen'],
         });
       }
     });

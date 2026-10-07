@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/api_config.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import 'resumen_pedido_screen.dart';
@@ -61,6 +62,7 @@ class _CatalogoProductosScreenState extends State<CatalogoProductosScreen> {
       }
       _modoOffline = false;
     } catch (e) {
+      debugPrint('Catalogo sin conexión al servidor, usando datos locales: $e');
       // Sin conexión, cargar desde SQLite
       if (DatabaseService.isAvailable) {
         _productos = await DatabaseService.obtenerProductos();
@@ -424,11 +426,29 @@ class _CatalogoProductosScreenState extends State<CatalogoProductosScreen> {
               color: AppColors.background,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              Icons.inventory_2_outlined,
-              color: AppColors.textPrimary.withValues(alpha: 0.25),
-              size: 28,
-            ),
+            clipBehavior: Clip.antiAlias,
+            child:
+                (producto['imagen'] != null &&
+                    producto['imagen'].toString().isNotEmpty)
+                ? Image.network(
+                    '${ApiConfig.storageUrl}/${producto['imagen']}',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, error, __) {
+                      debugPrint(
+                        'Error al cargar imagen ${ApiConfig.storageUrl}/${producto['imagen']}: $error',
+                      );
+                      return Icon(
+                        Icons.broken_image_outlined,
+                        color: AppColors.textPrimary.withValues(alpha: 0.25),
+                        size: 28,
+                      );
+                    },
+                  )
+                : Icon(
+                    Icons.inventory_2_outlined,
+                    color: AppColors.textPrimary.withValues(alpha: 0.25),
+                    size: 28,
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
