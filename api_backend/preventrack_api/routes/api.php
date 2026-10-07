@@ -23,6 +23,15 @@ use App\Http\Controllers\DashboardController;
 // -----------------------------------------------------------------
 Route::post('/login', [AuthController::class, 'login']);
 
+// Imágenes de productos (las entrega el propio API para que la app móvil
+// no dependa del enlace simbólico public/storage).
+Route::get('/imagenes/{path}', function (string $path) {
+    abort_unless(str_starts_with($path, 'productos/'), 404);
+    abort_unless(\Illuminate\Support\Facades\Storage::disk('public')->exists($path), 404);
+
+    return \Illuminate\Support\Facades\Storage::disk('public')->response($path);
+})->where('path', '.*');
+
 // -----------------------------------------------------------------
 // Rutas protegidas (requieren token Sanctum)
 // -----------------------------------------------------------------
@@ -79,6 +88,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('cuotas/{cuota}/evaluar', [ComisionController::class, 'evaluarCuota']);
     Route::post('comisiones/{comision}/marcar-pagada', [ComisionController::class, 'marcarPagada']);
     Route::get('reportes/ventas', [ReporteController::class, 'ventas']);
+    Route::get('reportes/hoja-pedidos', [ReporteController::class, 'hojaPedidosDia']);
 
     Route::get('reportes/clientes', [ReporteController::class, 'clientes']);
     Route::get('reportes/productos', [ReporteController::class, 'productos']);
