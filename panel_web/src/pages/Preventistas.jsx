@@ -89,6 +89,13 @@ export default function Preventistas() {
   const mapaInstanciaRef = useRef(null)
   const marcadoresRef = useRef([])
 
+  // Ubicación individual (un preventista a la vez)
+  const [ubicacionAbierta, setUbicacionAbierta] = useState(null) // datos de monitoreo de ese preventista
+  const [ubicacionLoading, setUbicacionLoading] = useState(false)
+  const mapaIndividualRef = useRef(null)
+  const mapaIndividualInstanciaRef = useRef(null)
+  const marcadorIndividualRef = useRef(null)
+
   function cargar() {
     setLoading(true)
     client
@@ -376,6 +383,81 @@ export default function Preventistas() {
     }
   }, [monitoreoData])
 
+  // --- Ubicación individual ---
+
+  async function cargarUbicacionIndividual(id) {
+    try {
+      const res = await client.get('/monitoreo')
+      const datos = (res.data ?? []).find((m) => m.id === id)
+      setUbicacionAbierta(datos || null)
+    } catch {
+      setUbicacionAbierta(null)
+    }
+  }
+
+  async function abrirUbicacionIndividual(p) {
+    setUbicacionLoading(true)
+    await cargarUbicacionIndividual(p.id)
+    setUbicacionLoading(false)
+  }
+
+  function cerrarUbicacionIndividual() {
+    setUbicacionAbierta(null)
+  }
+
+  // Refresca la ubicación de este preventista cada 30 segundos mientras
+  // el modal individual esté abierto.
+  useEffect(() => {
+    if (!ubicacionAbierta) return
+    const id = ubicacionAbierta.id
+    const intervalo = setInterval(() => {
+      cargarUbicacionIndividual(id)
+    }, 30000)
+    return () => clearInterval(intervalo)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ubicacionAbierta?.id])
+
+  // Inicializa/destruye el mapa individual junto con el modal.
+  useEffect(() => {
+    if (ubicacionAbierta && mapaIndividualRef.current && !mapaIndividualInstanciaRef.current) {
+      mapaIndividualInstanciaRef.current = L.map(mapaIndividualRef.current).setView(
+        [19.0414, -98.2063],
+        13,
+      )
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(mapaIndividualInstanciaRef.current)
+    }
+
+    if (!ubicacionAbierta && mapaIndividualInstanciaRef.current) {
+      mapaIndividualInstanciaRef.current.remove()
+      mapaIndividualInstanciaRef.current = null
+      marcadorIndividualRef.current = null
+    }
+  }, [ubicacionAbierta])
+
+  // Actualiza el marcador del mapa individual cuando llegan datos nuevos.
+  useEffect(() => {
+    if (!mapaIndividualInstanciaRef.current) return
+
+    if (marcadorIndividualRef.current) {
+      marcadorIndividualRef.current.remove()
+      marcadorIndividualRef.current = null
+    }
+
+    if (ubicacionAbierta?.ubicacion) {
+      const { latitud, longitud } = ubicacionAbierta.ubicacion
+      marcadorIndividualRef.current = L.marker([latitud, longitud], {
+        icon: iconoPreventista,
+      })
+        .addTo(mapaIndividualInstanciaRef.current)
+        .bindPopup(`<b>${ubicacionAbierta.nombre}</b>`)
+        .openPopup()
+      mapaIndividualInstanciaRef.current.setView([latitud, longitud], 15)
+    }
+  }, [ubicacionAbierta])
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -458,6 +540,12 @@ export default function Preventistas() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right space-x-3">
+                    <button
+                      onClick={() => abrirUbicacionIndividual(p)}
+                      className="text-secondary font-medium hover:underline"
+                    >
+                      📍 Ver ubicación
+                    </button>
                     <button
                       onClick={() => abrirHistorial(p)}
                       className="text-primary font-medium hover:underline"
@@ -878,6 +966,65 @@ export default function Preventistas() {
               </div>
             ) : (
               <p className="text-neutral-400 text-center py-8">No hay preventistas activos.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal ubicación individual */}
+      {(ubicacionAbierta || ubicacionLoading) && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
+          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-primary">
+                {ubicacionAbierta ? `Ubicación — ${ubicacionAbierta.nombre}` : 'Ubicación'}
+              </h2>
+              <button
+                onClick={cerrarUbicacionIndividual}
+                className="text-neutral-400 hover:text-neutral-600 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {ubicacionLoading ? (
+              <p className="text-neutral-400 text-center py-8">Cargando...</p>
+            ) : ubicacionAbierta ? (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span
+                    className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${
+                      ubicacionAbierta.jornada_activa
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-neutral-100 text-neutral-500'
+                    }`}
+                  >
+                    {ubicacionAbierta.jornada_activa
+                      ? `Activo desde ${ubicacionAbierta.hora_inicio}`
+                      : 'Sin jornada activa'}
+                  </span>
+                  <p className="text-xs text-neutral-400">Se actualiza cada 30 segundos</p>
+                </div>
+
+                <div
+                  ref={mapaIndividualRef}
+                  className="w-full h-80 rounded-lg border border-neutral-200 z-0 mb-3"
+                />
+
+                {ubicacionAbierta.ubicacion ? (
+                  <p className="text-sm text-neutral-600">
+                    {ubicacionAbierta.ubicacion.origen === 'en_vivo'
+                      ? ubicacionAbierta.ubicacion.reciente
+                        ? 'Ubicación en vivo'
+                        : 'Última ubicación en vivo (no reciente)'
+                      : 'Ubicación al iniciar jornada'}
+                  </p>
+                ) : (
+                  <p className="text-sm text-neutral-400 italic">Sin ubicación registrada</p>
+                )}
+              </>
+            ) : (
+              <p className="text-neutral-400 text-center py-8">No se pudo cargar la ubicación.</p>
             )}
           </div>
         </div>

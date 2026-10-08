@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
 import client from '../api/client'
+import UbicacionPicker from '../components/UbicacionPicker'
+
+const emptyUbicacion = {
+  direccion: '',
+  municipio: '',
+  latitud: '',
+  longitud: '',
+}
 
 const emptyForm = {
   folio: '',
@@ -51,7 +59,9 @@ export default function Clientes() {
   const [domEditingId, setDomEditingId] = useState(null)
   const [domForm, setDomForm] = useState(emptyDomicilio)
   const [domError, setDomError] = useState('')
-  const [buscandoUbicacion, setBuscandoUbicacion] = useState(false)
+
+  // Dirección y ubicación que se captura al crear un cliente nuevo
+  const [ubicNuevo, setUbicNuevo] = useState(emptyUbicacion)
 
   // Historial del cliente
   const [historialCliente, setHistorialCliente] = useState(null)
@@ -73,6 +83,7 @@ export default function Clientes() {
 
   function abrirNuevo() {
     setForm(emptyForm)
+    setUbicNuevo(emptyUbicacion)
     setEditingId(null)
     setFormError('')
     setShowForm(true)
@@ -101,7 +112,16 @@ export default function Clientes() {
       if (editingId) {
         await client.put(`/clientes/${editingId}`, form)
       } else {
-        await client.post('/clientes', form)
+        const res = await client.post('/clientes', form)
+        // Al crear el cliente se registra también su dirección principal,
+        // con su ubicación, para poder asignarlo directo en Rutas.
+        await client.post(`/clientes/${res.data.id}/domicilios`, {
+          direccion: ubicNuevo.direccion,
+          municipio: ubicNuevo.municipio || null,
+          latitud: ubicNuevo.latitud !== '' ? Number(ubicNuevo.latitud) : null,
+          longitud: ubicNuevo.longitud !== '' ? Number(ubicNuevo.longitud) : null,
+          es_principal: true,
+        })
       }
       setShowForm(false)
       cargar()
@@ -145,28 +165,6 @@ export default function Clientes() {
     })
     setDomError('')
     setShowDomForm(true)
-  }
-
-  function usarUbicacionActual() {
-    if (!navigator.geolocation) {
-      setDomError('Tu navegador no soporta geolocalización.')
-      return
-    }
-    setBuscandoUbicacion(true)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setDomForm((f) => ({
-          ...f,
-          latitud: pos.coords.latitude.toFixed(7),
-          longitud: pos.coords.longitude.toFixed(7),
-        }))
-        setBuscandoUbicacion(false)
-      },
-      () => {
-        setDomError('No se pudo obtener tu ubicación. Revisa los permisos del navegador.')
-        setBuscandoUbicacion(false)
-      },
-    )
   }
 
   async function guardarDireccion(e) {
@@ -401,7 +399,7 @@ export default function Clientes() {
       {/* Modal cliente */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
-          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-primary mb-4">
               {editingId ? 'Editar cliente' : 'Nuevo cliente'}
             </h2>
@@ -465,6 +463,37 @@ export default function Clientes() {
                 </select>
               </div>
 
+              {!editingId && (
+                <div className="border-t border-neutral-100 pt-3 space-y-3">
+                  <p className="text-sm font-semibold text-neutral-700">
+                    Dirección y ubicación del cliente
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">Dirección</label>
+                    <input
+                      type="text"
+                      value={ubicNuevo.direccion}
+                      onChange={(e) => setUbicNuevo({ ...ubicNuevo, direccion: e.target.value })}
+                      className="w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">Municipio</label>
+                    <input
+                      type="text"
+                      value={ubicNuevo.municipio}
+                      onChange={(e) => setUbicNuevo({ ...ubicNuevo, municipio: e.target.value })}
+                      className="w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary"
+                    />
+                  </div>
+                  <UbicacionPicker
+                    value={ubicNuevo}
+                    onChange={(parcial) => setUbicNuevo((u) => ({ ...u, ...parcial }))}
+                  />
+                </div>
+              )}
+
               {formError && <p className="text-red-600 text-sm">{formError}</p>}
 
               <div className="flex justify-end gap-3 pt-2">
@@ -490,7 +519,7 @@ export default function Clientes() {
       {/* Modal dirección */}
       {showDomForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
-          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-primary mb-4">
               {domEditingId ? 'Editar dirección' : 'Nueva dirección'} — {domCliente?.nombre_negocio}
             </h2>
@@ -515,40 +544,10 @@ export default function Clientes() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
-                  Coordenadas (para que aparezca en el mapa de la app)
-                </label>
-                <button
-                  type="button"
-                  onClick={usarUbicacionActual}
-                  disabled={buscandoUbicacion}
-                  className="w-full mb-2 bg-secondary text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-secondary/90 disabled:opacity-50"
-                >
-                  {buscandoUbicacion ? 'Obteniendo ubicación...' : '📍 Usar mi ubicación actual'}
-                </button>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    step="any"
-                    placeholder="Latitud"
-                    value={domForm.latitud}
-                    onChange={(e) => setDomForm({ ...domForm, latitud: e.target.value })}
-                    className="flex-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
-                  />
-                  <input
-                    type="number"
-                    step="any"
-                    placeholder="Longitud"
-                    value={domForm.longitud}
-                    onChange={(e) => setDomForm({ ...domForm, longitud: e.target.value })}
-                    className="flex-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
-                  />
-                </div>
-                <p className="text-xs text-neutral-400 mt-1">
-                  El botón usa la ubicación de este dispositivo. Úsalo cuando estés físicamente en la dirección del cliente, o pídele a tu compañera que la capture desde su celular en la app.
-                </p>
-              </div>
+              <UbicacionPicker
+                value={domForm}
+                onChange={(parcial) => setDomForm((f) => ({ ...f, ...parcial }))}
+              />
 
               <div className="flex items-center gap-2">
                 <input
