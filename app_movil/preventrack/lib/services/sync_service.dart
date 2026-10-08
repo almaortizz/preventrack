@@ -127,6 +127,11 @@ class SyncService {
         if (result['statusCode'] >= 200 && result['statusCode'] < 300) {
           await DatabaseService.eliminarOperacionPendiente(op['id'] as int);
           subidas++;
+        } else if (op['tipo'] == 'visitar_parada' &&
+            result['statusCode'] == 422) {
+          // La parada ya quedó visitada (p. ej. por un pedido que se subió
+          // antes); la visita en cola ya no aplica
+          await DatabaseService.eliminarOperacionPendiente(op['id'] as int);
         } else {
           fallidas++;
         }

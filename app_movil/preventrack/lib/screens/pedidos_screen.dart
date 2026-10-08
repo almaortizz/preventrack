@@ -148,15 +148,14 @@ class _PedidosScreenState extends State<PedidosScreen> {
                     title: Text(nombre),
                     subtitle: Text('ID: #$folio'),
                     trailing: const Icon(Icons.chevron_right, size: 20),
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(ctx);
-                      Navigator.push(
+                      final hubo = await CatalogoProductosScreen.abrir(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              CatalogoProductosScreen(cliente: cliente),
-                        ),
+                        cliente: cliente,
+                        origen: OrigenPedido.pedidos,
                       );
+                      if (hubo == true && mounted) _cargarPedidos();
                     },
                   );
                 },

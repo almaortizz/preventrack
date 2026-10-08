@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\RegistroGps;
 use App\Models\Ruta;
-use App\Models\Venta;
+use App\Models\Visita;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class RutaController extends Controller
 {
@@ -75,31 +78,51 @@ class RutaController extends Controller
         return response()->json($ruta->load('detalle.domicilio.cliente', 'detalle.venta'));
     }
 
-    // Marca un domicilio de la ruta como visitado y, si tiene un pedido ligado,
-    // lo marca automáticamente como entregado
-    public function marcarVisitada(Ruta $ruta, $detalleRutaId)
+    // Registra la visita a una parada sin pedido: "sin_venta" la deja visitada,
+    // "no_disponible" permite volver a atenderla ese mismo día.
+    // La entrega de pedidos se registra aparte (ventas/{venta}/marcar-entregado).
+    public function marcarVisitada(Request $request, Ruta $ruta, $detalleRutaId)
     {
-        $detalle = $ruta->detalle()->findOrFail($detalleRutaId);
-        $detalle->update(['estado' => 'visitada']);
+        $datos = $request->validate([
+            'resultado' => 'required|in:sin_venta,no_disponible',
+            'latitud'   => 'nullable|numeric|between:-90,90',
+            'longitud'  => 'nullable|numeric|between:-180,180',
+            'precision' => 'nullable|numeric|min:0',
+        ]);
 
-        if ($detalle->venta_id) {
-            $venta = Venta::find($detalle->venta_id);
-            if ($venta && $venta->estado === 'en_ruta') {
-                $venta->update([
-                    'estado' => 'entregado',
-                    'fecha_entrega' => now()->toDateString(),
-                    'hora_entrega' => now()->toTimeString(),
-                ]);
-            }
+        if (!$ruta->puedeAtender($request->user())) {
+            return response()->json(['message' => 'Esta ruta no está asignada a tu usuario.'], 403);
         }
 
-        // Si ya no quedan pendientes, la ruta se marca finalizada
-        $pendientes = $ruta->detalle()->where('estado', 'pendiente')->count();
-        if ($pendientes === 0) {
-            $ruta->update(['estado' => 'finalizada']);
-        } elseif ($ruta->estado === 'planeada') {
-            $ruta->update(['estado' => 'en_curso']);
+        $detalle = $ruta->detalle()->with('domicilio')->findOrFail($detalleRutaId);
+
+        if ($detalle->estado === 'visitada') {
+            throw ValidationException::withMessages([
+                'estado' => ['Esta parada ya fue visitada.'],
+            ]);
         }
+
+        DB::transaction(function () use ($request, $datos, $ruta, $detalle) {
+            $lat = $datos['latitud'] ?? null;
+            $lng = $datos['longitud'] ?? null;
+
+            Visita::create([
+                'usuario_id'   => $request->user()->id,
+                'domicilio_id' => $detalle->domicilio_id,
+                'fecha_hora'   => now(),
+                'latitud'      => $lat,
+                'longitud'     => $lng,
+                'precision_m'  => $datos['precision'] ?? null,
+                'distancia_m'  => RegistroGps::distanciaMetros($lat, $lng, $detalle->domicilio),
+                'resultado'    => $datos['resultado'],
+            ]);
+
+            $detalle->update([
+                'estado' => $datos['resultado'] === 'no_disponible' ? 'no_disponible' : 'visitada',
+            ]);
+
+            $ruta->actualizarEstado();
+        });
 
         return response()->json($ruta->load('detalle.domicilio.cliente', 'detalle.venta'));
     }

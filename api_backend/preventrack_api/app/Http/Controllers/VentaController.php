@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DetalleRuta;
 use App\Models\Producto;
 use App\Models\RegistroGps;
+use App\Models\Ruta;
 use App\Models\Venta;
+use App\Models\Visita;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -64,9 +68,11 @@ class VentaController extends Controller
             'productos' => 'required|array|min:1',
             'productos.*.producto_id' => 'required|exists:productos,id',
             'productos.*.cantidad' => 'required|integer|min:1',
+            'detalle_ruta_id' => 'nullable|integer',
+            'precision' => 'nullable|numeric|min:0',
         ]);
 
-        $venta = DB::transaction(function () use ($datos) {
+        $venta = DB::transaction(function () use ($request, $datos) {
 
             $total = 0;
             $detalles = [];
@@ -105,10 +111,66 @@ class VentaController extends Controller
 
             $venta->detalle()->createMany($detalles);
 
+            $this->registrarVisitaEnRuta($request, $venta, $datos);
+
             return $venta;
         });
 
         return response()->json($venta->load('detalle.producto'), 201);
+    }
+
+    // Si el domicilio del pedido es una parada sin atender de la ruta del
+    // preventista, la marca visitada y registra la visita con resultado "venta".
+    // Usa la parada indicada por la app (detalle_ruta_id) o, si no viene,
+    // la busca en la ruta de hoy. Nunca impide que se cree el pedido.
+    private function registrarVisitaEnRuta(Request $request, Venta $venta, array $datos): void
+    {
+        $sinAtender = ['pendiente', 'no_disponible'];
+        $detalleRutaId = $datos['detalle_ruta_id'] ?? null;
+
+        if ($detalleRutaId) {
+            $detalle = DetalleRuta::with(['ruta', 'domicilio'])
+                ->where('id', $detalleRutaId)
+                ->where('domicilio_id', $venta->domicilio_id)
+                ->whereIn('estado', $sinAtender)
+                ->first();
+        } else {
+            $hoy = Carbon::now('America/Mexico_City')->toDateString();
+            $ruta = Ruta::where('usuario_id', $venta->preventista_vendedor_id)
+                ->whereDate('fecha', $hoy)
+                ->first();
+
+            $detalle = $ruta?->detalle()
+                ->with(['ruta', 'domicilio'])
+                ->where('domicilio_id', $venta->domicilio_id)
+                ->whereIn('estado', $sinAtender)
+                ->orderBy('orden_visita')
+                ->first();
+        }
+
+        if (!$detalle
+            || (int) $detalle->ruta->usuario_id !== (int) $venta->preventista_vendedor_id
+            || !$detalle->ruta->puedeAtender($request->user())) {
+            return;
+        }
+
+        $lat = $venta->latitud_registro;
+        $lng = $venta->longitud_registro;
+
+        Visita::create([
+            'usuario_id'   => $venta->preventista_vendedor_id,
+            'domicilio_id' => $venta->domicilio_id,
+            'fecha_hora'   => now(),
+            'latitud'      => $lat,
+            'longitud'     => $lng,
+            'precision_m'  => $datos['precision'] ?? null,
+            'distancia_m'  => RegistroGps::distanciaMetros($lat, $lng, $detalle->domicilio),
+            'resultado'    => 'venta',
+            'venta_id'     => $venta->id,
+        ]);
+
+        $detalle->update(['estado' => 'visitada']);
+        $detalle->ruta->actualizarEstado();
     }
 
     public function show(Venta $venta)

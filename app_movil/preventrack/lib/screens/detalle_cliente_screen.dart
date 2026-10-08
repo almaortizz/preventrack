@@ -466,12 +466,10 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
               height: 50,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  Navigator.push(
+                  CatalogoProductosScreen.abrir(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          CatalogoProductosScreen(cliente: widget.cliente),
-                    ),
+                    cliente: widget.cliente,
+                    origen: OrigenPedido.cliente,
                   );
                 },
                 icon: const Icon(Icons.shopping_cart_outlined, size: 20),

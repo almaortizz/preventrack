@@ -24,16 +24,6 @@ class RegistroGps extends Model
     {
         $lat = $request->input('latitud');
         $lng = $request->input('longitud');
-        $distancia = null;
-
-        if ($lat !== null && $lng !== null && $domicilio && $domicilio->latitud && $domicilio->longitud) {
-            $r = 6371000; // radio de la Tierra en metros
-            $dLat = deg2rad($domicilio->latitud - $lat);
-            $dLng = deg2rad($domicilio->longitud - $lng);
-            $a = sin($dLat / 2) ** 2
-               + cos(deg2rad($lat)) * cos(deg2rad($domicilio->latitud)) * sin($dLng / 2) ** 2;
-            $distancia = round($r * 2 * atan2(sqrt($a), sqrt(1 - $a)), 2);
-        }
 
         return self::create(array_merge([
             'usuario_id'  => $request->user()->id,
@@ -41,7 +31,26 @@ class RegistroGps extends Model
             'latitud'     => $lat,
             'longitud'    => $lng,
             'precision_m' => $request->input('precision'),
-            'distancia_m' => $distancia,
+            'distancia_m' => self::distanciaMetros($lat, $lng, $domicilio),
         ], $extra));
+    }
+
+    /**
+     * Distancia en metros (Haversine) entre un punto y el domicilio.
+     * Regresa null si falta alguna coordenada.
+     */
+    public static function distanciaMetros($lat, $lng, $domicilio): ?float
+    {
+        if ($lat === null || $lng === null || !$domicilio || !$domicilio->latitud || !$domicilio->longitud) {
+            return null;
+        }
+
+        $r = 6371000; // radio de la Tierra en metros
+        $dLat = deg2rad($domicilio->latitud - $lat);
+        $dLng = deg2rad($domicilio->longitud - $lng);
+        $a = sin($dLat / 2) ** 2
+           + cos(deg2rad($lat)) * cos(deg2rad($domicilio->latitud)) * sin($dLng / 2) ** 2;
+
+        return round($r * 2 * atan2(sqrt($a), sqrt(1 - $a)), 2);
     }
 }

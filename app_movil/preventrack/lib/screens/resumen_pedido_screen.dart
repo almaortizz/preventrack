@@ -5,17 +5,25 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import 'confirmacion_pedido_screen.dart';
 import '../services/database_service.dart';
+import '../services/ubicacion_service.dart';
+import 'catalogo_productos_screen.dart';
 
 class ResumenPedidoScreen extends StatefulWidget {
   final Map<String, dynamic> cliente;
   final Map<int, Map<String, dynamic>> carrito;
   final DateTime horaInicio;
+  final OrigenPedido origen;
+  final int? domicilioId;
+  final int? detalleRutaId;
 
   const ResumenPedidoScreen({
     super.key,
     required this.cliente,
     required this.carrito,
     required this.horaInicio,
+    required this.origen,
+    this.domicilioId,
+    this.detalleRutaId,
   });
 
   @override
@@ -78,103 +86,81 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
   }
 
   Future<void> _confirmarPedido() async {
-    if (_carrito.isEmpty) return;
+    if (_carrito.isEmpty || _isLoading) return;
 
-    setState(() => _isLoading = true);
-
-    try {
+    // Domicilio exacto si viene (p. ej. la parada de la ruta);
+    // si no, el primero del cliente
+    int? domicilioId = widget.domicilioId;
+    if (domicilioId == null) {
       final domicilios = widget.cliente['domicilios'] as List<dynamic>?;
-      int? domicilioId;
       if (domicilios != null && domicilios.isNotEmpty) {
         domicilioId = domicilios[0]['id'];
       }
+    }
 
-      if (domicilioId == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('El cliente no tiene domicilio registrado'),
-            ),
-          );
-        }
-        setState(() => _isLoading = false);
-        return;
-      }
+    if (domicilioId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El cliente no tiene domicilio registrado'),
+        ),
+      );
+      return;
+    }
 
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final usuarioId = auth.usuario?['id'];
+    setState(() => _isLoading = true);
 
-      final productos = _carrito.values.map((item) {
-        return {
-          'producto_id': item['producto']['id'],
-          'cantidad': item['cantidad'],
-          'precio_unitario': item['producto']['precio_venta'],
-        };
-      }).toList();
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final usuarioId = auth.usuario?['id'];
 
-      final body = {
-        'domicilio_id': domicilioId,
-        'preventista_vendedor_id': usuarioId,
-        'productos': productos,
-        'notas': _notasController.text.isNotEmpty
-            ? _notasController.text
-            : null,
-        'fecha_inicio_creacion': widget.horaInicio.toIso8601String(),
-        'fecha_fin_creacion': DateTime.now().toIso8601String(),
-        'descuento': _descuento,
+    // Ubicación donde se levantó el pedido; si no hay GPS se envía sin ella
+    final posicion = await UbicacionService.instancia.obtenerUbicacionActual();
+
+    final productos = _carrito.values.map((item) {
+      return {
+        'producto_id': item['producto']['id'],
+        'cantidad': item['cantidad'],
+        'precio_unitario': item['producto']['precio_venta'],
       };
+    }).toList();
 
+    final body = {
+      'domicilio_id': domicilioId,
+      'preventista_vendedor_id': usuarioId,
+      'productos': productos,
+      'notas': _notasController.text.isNotEmpty ? _notasController.text : null,
+      'fecha_inicio_creacion': widget.horaInicio.toIso8601String(),
+      'fecha_fin_creacion': DateTime.now().toIso8601String(),
+      'descuento': _descuento,
+      'latitud_registro': posicion?.latitude,
+      'longitud_registro': posicion?.longitude,
+      'precision': posicion?.accuracy,
+      'detalle_ruta_id': widget.detalleRutaId,
+    };
+
+    try {
       final result = await _api.post('ventas', body: body);
+      if (!mounted) return;
 
-      if (result['statusCode'] == 201 && mounted) {
+      if (result['statusCode'] == 201) {
         final venta = result['data'];
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                ConfirmacionPedidoScreen(venta: venta, cliente: widget.cliente),
+            builder: (_) => ConfirmacionPedidoScreen(
+              venta: venta,
+              cliente: widget.cliente,
+              origen: widget.origen,
+            ),
           ),
         );
-      } else {
-        if (mounted) {
-          final msg = result['data']['message'] ?? 'Error al crear el pedido';
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(msg)));
-        }
+        return;
       }
+
+      final msg = result['data']['message'] ?? 'Error al crear el pedido';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       // Sin conexión: guardar pedido offline
       if (DatabaseService.isAvailable) {
-        final domicilios = widget.cliente['domicilios'] as List<dynamic>?;
-        int? domicilioId;
-        if (domicilios != null && domicilios.isNotEmpty) {
-          domicilioId = domicilios[0]['id'];
-        }
-
-        final auth = Provider.of<AuthProvider>(context, listen: false);
-        final usuarioId = auth.usuario?['id'];
-
-        final productos = _carrito.values.map((item) {
-          return {
-            'producto_id': item['producto']['id'],
-            'cantidad': item['cantidad'],
-            'precio_unitario': item['producto']['precio_venta'],
-          };
-        }).toList();
-
-        final body = {
-          'domicilio_id': domicilioId,
-          'preventista_vendedor_id': usuarioId,
-          'productos': productos,
-          'notas': _notasController.text.isNotEmpty
-              ? _notasController.text
-              : null,
-          'fecha_inicio_creacion': widget.horaInicio.toIso8601String(),
-          'fecha_fin_creacion': DateTime.now().toIso8601String(),
-          'descuento': _descuento,
-        };
-
         await DatabaseService.guardarOperacionPendiente(
           tipo: 'crear_pedido',
           endpoint: 'ventas',
@@ -182,30 +168,27 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
           body: body,
         );
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Pedido guardado offline. Se enviará cuando haya conexión.',
-              ),
-              backgroundColor: AppColors.warning,
-              duration: Duration(seconds: 3),
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Pedido guardado offline. Se enviará cuando haya conexión.',
             ),
-          );
-          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error de conexión. Intenta de nuevo.'),
-            ),
-          );
-        }
+            backgroundColor: AppColors.warning,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        CatalogoProductosScreen.volverAlOrigen(context);
+        return;
       }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error de conexión. Intenta de nuevo.')),
+      );
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Domicilio;
+use App\Models\RegistroGps;
 use App\Models\Visita;
 use Illuminate\Http\Request;
 
@@ -33,11 +35,21 @@ class VisitaController extends Controller
             'domicilio_id' => 'required|exists:domicilios,id',
             'latitud' => 'nullable|numeric',
             'longitud' => 'nullable|numeric',
-            'resultado' => 'required|in:venta,sin_venta',
+            'precision' => 'nullable|numeric|min:0',
+            'resultado' => 'required|in:venta,sin_venta,no_disponible',
             'venta_id' => 'nullable|exists:ventas,id',
         ]);
 
+        $domicilio = Domicilio::find($datos['domicilio_id']);
+
         $datos['fecha_hora'] = now();
+        $datos['precision_m'] = $datos['precision'] ?? null;
+        $datos['distancia_m'] = RegistroGps::distanciaMetros(
+            $datos['latitud'] ?? null,
+            $datos['longitud'] ?? null,
+            $domicilio
+        );
+        unset($datos['precision']);
 
         $visita = Visita::create($datos);
 

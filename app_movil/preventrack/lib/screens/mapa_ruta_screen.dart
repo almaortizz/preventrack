@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/database_service.dart';
+import '../services/ubicacion_service.dart';
 import 'catalogo_productos_screen.dart';
 
 class MapaRutaScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
   bool _isLoading = true;
   int _visitadas = 0;
   bool _modoOffline = false;
+  bool _registrando = false;
 
   // GPS y estado de ruta
   bool _rutaIniciada = false;
@@ -58,12 +60,15 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
             (a, b) =>
                 (a['orden_visita'] ?? 0).compareTo(b['orden_visita'] ?? 0),
           );
-          _visitadas = _paradas.where((p) => p['estado'] == 'visitada').length;
         }
         _modoOffline = false;
         if (DatabaseService.isAvailable) {
           await DatabaseService.guardarRutaDelDia(_ruta);
         }
+        // Después de guardar el respaldo, para no guardar estados locales
+        await _aplicarPendientesLocales();
+        _visitadas = _contarAtendidas();
+        if (!mounted) return;
         setState(() => _isLoading = false);
         return;
       }
@@ -79,13 +84,62 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
         _paradas.sort(
           (a, b) => (a['orden_visita'] ?? 0).compareTo(b['orden_visita'] ?? 0),
         );
-        _visitadas = _paradas.where((p) => p['estado'] == 'visitada').length;
+        await _aplicarPendientesLocales();
+        _visitadas = _contarAtendidas();
         _modoOffline = true;
         _cargarRutaOSRM();
       }
     }
+    if (!mounted) return;
     setState(() => _isLoading = false);
     _cargarRutaOSRM();
+  }
+
+  // Refleja en las paradas lo que se hizo sin conexión y sigue en la cola
+  // (pedidos y visitas), para que no aparezcan como pendientes mientras
+  // se sincronizan. Mismo criterio que usa la API al recibirlas.
+  Future<void> _aplicarPendientesLocales() async {
+    if (!DatabaseService.isAvailable) return;
+    final operaciones = await DatabaseService.obtenerOperacionesPendientes();
+
+    for (final op in operaciones) {
+      final tipo = op['tipo'];
+      if (tipo != 'crear_pedido' && tipo != 'visitar_parada') continue;
+      final bodyStr = op['body'] as String?;
+      if (bodyStr == null) continue;
+      final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+
+      final detalleRutaId = body['detalle_ruta_id'];
+      final parada = _paradas.cast<Map<String, dynamic>?>().firstWhere(
+        (p) => detalleRutaId != null
+            ? p!['id'] == detalleRutaId
+            : p!['domicilio_id'] == body['domicilio_id'] &&
+                  p['estado'] != 'visitada',
+        orElse: () => null,
+      );
+      if (parada == null || parada['estado'] == 'visitada') continue;
+
+      final noDisponible =
+          tipo == 'visitar_parada' && body['resultado'] == 'no_disponible';
+      parada['estado'] = noDisponible ? 'no_disponible' : 'visitada';
+      parada['pendiente_sync'] = true;
+    }
+  }
+
+  // Visitadas y no disponibles cuentan como atendidas en el progreso
+  int _contarAtendidas() => _paradas
+      .where((p) => p['estado'] == 'visitada' || p['estado'] == 'no_disponible')
+      .length;
+
+  Color _colorEstado(String estado) {
+    switch (estado) {
+      case 'visitada':
+        return AppColors.success;
+      case 'no_disponible':
+        return AppColors.warning;
+      default:
+        return AppColors.secondary;
+    }
   }
 
   Future<void> _cargarRutaOSRM() async {
@@ -282,7 +336,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
         title: const Text('Finalizar ruta'),
         content: Text(
           '¿Estás seguro de finalizar tu ruta?\n'
-          'Paradas visitadas: $_visitadas de ${_paradas.length}',
+          'Paradas atendidas: $_visitadas de ${_paradas.length}',
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         actions: [
@@ -324,43 +378,73 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
   //  MARCAR VISITADA
   // ═══════════════════════════════════════════
 
-  Future<void> _marcarVisitada(int paradaId, BuildContext sheetContext) async {
+  // Registra la visita sin pedido ("sin_venta" o "no_disponible") con la
+  // ubicación del preventista. Sin conexión se guarda en la cola.
+  Future<void> _registrarVisita(int paradaId, String resultado) async {
     final rutaId = _ruta?['id'];
-    if (rutaId == null) return;
+    if (rutaId == null || _registrando) return;
+    _registrando = true;
+
+    final endpoint = 'rutas/$rutaId/visitar/$paradaId';
+    final noDisponible = resultado == 'no_disponible';
+    final posicion = await UbicacionService.instancia.obtenerUbicacionActual();
+    final body = {
+      'resultado': resultado,
+      'latitud': posicion?.latitude,
+      'longitud': posicion?.longitude,
+      'precision': posicion?.accuracy,
+      // Solo lo usa la app para reflejar la parada mientras está en la cola
+      'detalle_ruta_id': paradaId,
+    };
 
     try {
-      final result = await _api.post('rutas/$rutaId/visitar/$paradaId');
-
+      final result = await _api.post(endpoint, body: body);
       if (!mounted) return;
 
       if (result['statusCode'] == 200) {
-        Navigator.pop(sheetContext);
         await _cargarRuta();
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Parada marcada como visitada'),
-            backgroundColor: AppColors.success,
-            duration: Duration(seconds: 2),
-          ),
+        _avisar(
+          noDisponible
+              ? 'Parada marcada — cliente no disponible'
+              : 'Parada marcada como visitada',
+          noDisponible ? AppColors.warning : AppColors.success,
         );
       } else {
-        final mensaje = result['data']?['message'] ?? 'Error al marcar visita';
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(mensaje), backgroundColor: AppColors.error),
+        _avisar(
+          result['data']?['message'] ?? 'Error al marcar visita',
+          AppColors.error,
         );
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error de conexión'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      if (DatabaseService.isAvailable) {
+        await DatabaseService.guardarOperacionPendiente(
+          tipo: 'visitar_parada',
+          endpoint: endpoint,
+          metodo: 'POST',
+          body: body,
+        );
+        await _cargarRuta();
+        _avisar(
+          'Sin conexión. La visita se enviará cuando haya conexión.',
+          AppColors.warning,
+        );
+      } else {
+        _avisar('Error de conexión', AppColors.error);
+      }
+    } finally {
+      _registrando = false;
     }
+  }
+
+  void _avisar(String mensaje, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: color,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   void _marcarNoDisponible(int paradaId, BuildContext sheetContext) {
@@ -369,7 +453,8 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Cliente no disponible'),
         content: const Text(
-          'El cliente no se encuentra. ¿Marcar la parada como no disponible?',
+          'El cliente no se encuentra. ¿Marcar la parada como no disponible?\n'
+          'Podrás volver a atenderla más tarde.',
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         actions: [
@@ -378,33 +463,10 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
               Navigator.pop(ctx);
               Navigator.pop(sheetContext);
-
-              final rutaId = _ruta?['id'];
-              if (rutaId == null) return;
-
-              try {
-                await _api.post('rutas/$rutaId/visitar/$paradaId');
-                await _cargarRuta();
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Parada marcada — cliente no disponible'),
-                    backgroundColor: AppColors.warning,
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Error de conexión'),
-                    backgroundColor: AppColors.error,
-                  ),
-                );
-              }
+              _registrarVisita(paradaId, 'no_disponible');
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.warning,
@@ -418,16 +480,6 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _marcarVisitadaAutomatica(int paradaId) async {
-    final rutaId = _ruta?['id'];
-    if (rutaId == null) return;
-
-    try {
-      await _api.post('rutas/$rutaId/visitar/$paradaId');
-      await _cargarRuta();
-    } catch (_) {}
   }
 
   // ═══════════════════════════════════════════
@@ -480,9 +532,9 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
       final estado = parada['estado'] ?? 'pendiente';
       final orden = parada['orden_visita'] ?? (i + 1);
       final paradaId = parada['id'];
+      final pendienteSync = parada['pendiente_sync'] == true;
 
-      final esVisitada = estado == 'visitada';
-      final color = esVisitada ? AppColors.success : AppColors.secondary;
+      final color = _colorEstado(estado);
 
       markers.add(
         Marker(
@@ -490,8 +542,14 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
           width: 44,
           height: 44,
           child: GestureDetector(
-            onTap: () =>
-                _mostrarInfoParada(nombre, direccion, estado, orden, paradaId),
+            onTap: () => _mostrarInfoParada(
+              nombre,
+              direccion,
+              estado,
+              orden,
+              paradaId,
+              pendienteSync,
+            ),
             child: Container(
               decoration: BoxDecoration(
                 color: color,
@@ -506,8 +564,16 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                 ],
               ),
               child: Center(
-                child: esVisitada
-                    ? const Icon(Icons.check, color: Colors.white, size: 20)
+                child: estado != 'pendiente'
+                    ? Icon(
+                        pendienteSync
+                            ? Icons.cloud_upload_outlined
+                            : estado == 'visitada'
+                            ? Icons.check
+                            : Icons.person_off_outlined,
+                        color: Colors.white,
+                        size: 20,
+                      )
                     : Text(
                         '$orden',
                         style: const TextStyle(
@@ -560,8 +626,16 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
     String estado,
     int orden,
     int paradaId,
+    bool pendienteSync,
   ) {
     final esVisitada = estado == 'visitada';
+    final esNoDisponible = estado == 'no_disponible';
+    final color = _colorEstado(estado);
+    final etiqueta = esVisitada
+        ? 'Visitada'
+        : esNoDisponible
+        ? 'No disponible — Parada #$orden'
+        : 'Pendiente — Parada #$orden';
 
     showModalBottomSheet(
       context: context,
@@ -580,9 +654,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: esVisitada
-                        ? AppColors.success.withValues(alpha: 0.1)
-                        : AppColors.secondary.withValues(alpha: 0.1),
+                    color: color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
@@ -594,10 +666,10 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                           )
                         : Text(
                             '$orden',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.secondary,
+                              color: color,
                             ),
                           ),
                   ),
@@ -621,24 +693,42 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: esVisitada
-                              ? AppColors.success.withValues(alpha: 0.1)
-                              : AppColors.secondary.withValues(alpha: 0.1),
+                          color: color.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          esVisitada
-                              ? 'Visitada'
-                              : 'Pendiente — Parada #$orden',
+                          etiqueta,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: esVisitada
-                                ? AppColors.success
-                                : AppColors.secondary,
+                            color: color,
                           ),
                         ),
                       ),
+                      if (pendienteSync) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.cloud_upload_outlined,
+                              size: 14,
+                              color: AppColors.textPrimary.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Pendiente de sincronizar',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -666,7 +756,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                 ],
               ),
             ],
-            // Botones solo si la parada está pendiente
+            // Botones mientras la parada no esté visitada
             if (!esVisitada) ...[
               const SizedBox(height: 16),
               // Nuevo Pedido
@@ -684,24 +774,16 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                       final domicilio = parada['domicilio'];
                       final cliente = domicilio?['cliente'];
                       if (cliente != null) {
-                        final result = await Navigator.push(
+                        // La API marca la parada como visitada al crear
+                        // el pedido; aquí solo se recarga el mapa
+                        final hubo = await CatalogoProductosScreen.abrir(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                CatalogoProductosScreen(cliente: cliente),
-                          ),
+                          cliente: cliente,
+                          origen: OrigenPedido.ruta,
+                          domicilioId: domicilio['id'],
+                          detalleRutaId: paradaId,
                         );
-                        // Auto-marcar como visitada al regresar
-                        await _marcarVisitadaAutomatica(paradaId);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Parada marcada como visitada'),
-                              backgroundColor: AppColors.success,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        }
+                        if (hubo == true && mounted) await _cargarRuta();
                       }
                     }
                   },
@@ -726,7 +808,10 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                 width: double.infinity,
                 height: 46,
                 child: OutlinedButton.icon(
-                  onPressed: () => _marcarVisitada(paradaId, sheetContext),
+                  onPressed: () {
+                    Navigator.pop(sheetContext);
+                    _registrarVisita(paradaId, 'sin_venta');
+                  },
                   icon: const Icon(Icons.check_circle_outline, size: 20),
                   label: const Text(
                     'Marcar visitada (sin pedido)',
@@ -741,27 +826,33 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              // Cliente no disponible
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: OutlinedButton.icon(
-                  onPressed: () => _marcarNoDisponible(paradaId, sheetContext),
-                  icon: const Icon(Icons.person_off_outlined, size: 20),
-                  label: const Text(
-                    'Cliente no disponible',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.warning,
-                    side: const BorderSide(color: AppColors.warning),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              // Cliente no disponible (si ya lo estaba, no se repite)
+              if (!esNoDisponible) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        _marcarNoDisponible(paradaId, sheetContext),
+                    icon: const Icon(Icons.person_off_outlined, size: 20),
+                    label: const Text(
+                      'Cliente no disponible',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.warning,
+                      side: const BorderSide(color: AppColors.warning),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ],
             const SizedBox(height: 16),
           ],
@@ -898,7 +989,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '$_visitadas de $totalParadas paradas visitadas',
+                                    '$_visitadas de $totalParadas paradas atendidas',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textPrimary.withValues(
@@ -951,15 +1042,14 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 16,
+                          runSpacing: 4,
                           children: [
-                            if (_rutaIniciada) ...[
-                              _buildLeyenda('Tú', Colors.blue),
-                              const SizedBox(width: 16),
-                            ],
+                            if (_rutaIniciada) _buildLeyenda('Tú', Colors.blue),
                             _buildLeyenda('Visitada', AppColors.success),
-                            const SizedBox(width: 16),
+                            _buildLeyenda('No disponible', AppColors.warning),
                             _buildLeyenda('Pendiente', AppColors.secondary),
                           ],
                         ),
@@ -1067,6 +1157,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
 
   Widget _buildLeyenda(String label, Color color) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 10,

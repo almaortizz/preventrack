@@ -5,10 +5,68 @@ import '../services/api_service.dart';
 import 'resumen_pedido_screen.dart';
 import '../services/database_service.dart';
 
+// Pantalla desde la que se empezó el pedido; define a dónde se regresa
+// al terminarlo.
+enum OrigenPedido {
+  inicio('Volver al inicio', Icons.home_outlined),
+  cliente('Volver al cliente', Icons.person_outline),
+  ruta('Volver a la ruta', Icons.map_outlined),
+  pedidos('Volver a pedidos', Icons.receipt_long_outlined);
+
+  const OrigenPedido(this.textoRegreso, this.icono);
+  final String textoRegreso;
+  final IconData icono;
+}
+
 class CatalogoProductosScreen extends StatefulWidget {
   final Map<String, dynamic> cliente;
+  final OrigenPedido origen;
+  // Domicilio exacto del pedido (p. ej. el de la parada de la ruta);
+  // si es null se usa el primer domicilio del cliente.
+  final int? domicilioId;
+  // Parada de la ruta que se atiende con este pedido
+  final int? detalleRutaId;
 
-  const CatalogoProductosScreen({super.key, required this.cliente});
+  const CatalogoProductosScreen({
+    super.key,
+    required this.cliente,
+    required this.origen,
+    this.domicilioId,
+    this.detalleRutaId,
+  });
+
+  static const nombreRuta = 'catalogo';
+
+  // Abre el catálogo con nombre de ruta para poder regresar al origen
+  // desde la confirmación. Devuelve true si se registró un pedido.
+  static Future<bool?> abrir(
+    BuildContext context, {
+    required Map<String, dynamic> cliente,
+    required OrigenPedido origen,
+    int? domicilioId,
+    int? detalleRutaId,
+  }) {
+    return Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: nombreRuta),
+        builder: (_) => CatalogoProductosScreen(
+          cliente: cliente,
+          origen: origen,
+          domicilioId: domicilioId,
+          detalleRutaId: detalleRutaId,
+        ),
+      ),
+    );
+  }
+
+  // Cierra el flujo del pedido (catálogo, resumen y confirmación) y
+  // regresa a la pantalla que lo abrió, avisándole que hubo pedido.
+  static void volverAlOrigen(BuildContext context) {
+    final nav = Navigator.of(context);
+    nav.popUntil((r) => r.isFirst || r.settings.name == nombreRuta);
+    if (nav.canPop()) nav.pop(true);
+  }
 
   @override
   State<CatalogoProductosScreen> createState() =>
@@ -334,6 +392,9 @@ class _CatalogoProductosScreenState extends State<CatalogoProductosScreen> {
                             cliente: widget.cliente,
                             carrito: _carrito,
                             horaInicio: _horaInicio,
+                            origen: widget.origen,
+                            domicilioId: widget.domicilioId,
+                            detalleRutaId: widget.detalleRutaId,
                           ),
                         ),
                       );

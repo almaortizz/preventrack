@@ -10,7 +10,7 @@ class Visita extends Model
 
     protected $fillable = [
         'usuario_id', 'domicilio_id', 'fecha_hora', 'latitud',
-        'longitud', 'resultado', 'venta_id',
+        'longitud', 'precision_m', 'distancia_m', 'resultado', 'venta_id',
     ];
 
     public function usuario()
