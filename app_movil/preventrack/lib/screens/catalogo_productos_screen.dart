@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/api_config.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import 'resumen_pedido_screen.dart';
@@ -424,11 +425,24 @@ class _CatalogoProductosScreenState extends State<CatalogoProductosScreen> {
               color: AppColors.background,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              Icons.inventory_2_outlined,
-              color: AppColors.textPrimary.withValues(alpha: 0.25),
-              size: 28,
-            ),
+            clipBehavior: Clip.antiAlias,
+            child:
+                (producto['imagen'] != null &&
+                    producto['imagen'].toString().isNotEmpty)
+                ? Image.network(
+                    '${ApiConfig.storageUrl}/${producto['imagen']}',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.inventory_2_outlined,
+                      color: AppColors.textPrimary.withValues(alpha: 0.25),
+                      size: 28,
+                    ),
+                  )
+                : Icon(
+                    Icons.inventory_2_outlined,
+                    color: AppColors.textPrimary.withValues(alpha: 0.25),
+                    size: 28,
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
