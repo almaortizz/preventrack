@@ -54,6 +54,7 @@ export default function Clientes() {
 
   // Direcciones
   const [expandidoId, setExpandidoId] = useState(null)
+  const [mostrarDireccion, setMostrarDireccion] = useState(false)
   const [showDomForm, setShowDomForm] = useState(false)
   const [domCliente, setDomCliente] = useState(null)
   const [domEditingId, setDomEditingId] = useState(null)
@@ -231,12 +232,20 @@ export default function Clientes() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-neutral-800">Clientes</h1>
-        <button
-          onClick={abrirNuevo}
-          className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary/90"
-        >
-          + Nuevo cliente
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setMostrarDireccion(!mostrarDireccion)}
+            className="border border-neutral-200 text-neutral-600 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-neutral-50"
+          >
+            {mostrarDireccion ? 'Ocultar dirección' : 'Mostrar dirección'}
+          </button>
+          <button
+            onClick={abrirNuevo}
+            className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary/90"
+          >
+            + Nuevo cliente
+          </button>
+        </div>
       </div>
 
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
@@ -250,6 +259,7 @@ export default function Clientes() {
               <th className="px-4 py-3">Propietario</th>
               <th className="px-4 py-3">Teléfono</th>
               <th className="px-4 py-3">Zona</th>
+              {mostrarDireccion && <th className="px-4 py-3">Dirección</th>}
               <th className="px-4 py-3">Estado</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -257,7 +267,7 @@ export default function Clientes() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-neutral-400">
+                <td colSpan={mostrarDireccion ? 8 : 7} className="px-4 py-6 text-center text-neutral-400">
                   Cargando...
                 </td>
               </tr>
@@ -270,6 +280,14 @@ export default function Clientes() {
                     <td className="px-4 py-3">{c.propietario || '—'}</td>
                     <td className="px-4 py-3">{c.telefono || '—'}</td>
                     <td className="px-4 py-3">{c.zona || '—'}</td>
+                    {mostrarDireccion && (
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const d = (c.domicilios || []).find((x) => x.es_principal) || (c.domicilios || [])[0]
+                          return d ? [d.direccion, d.municipio].filter(Boolean).join(', ') : '—'
+                        })()}
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <span
                         className={`inline-block px-2 py-1 rounded-full text-xs font-semibold capitalize ${
@@ -437,8 +455,10 @@ export default function Clientes() {
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Teléfono</label>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  maxLength={10}
                   value={form.telefono}
-                  onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+                  onChange={(e) => setForm({ ...form, telefono: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                   className="w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary"
                 />
               </div>

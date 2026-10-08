@@ -57,7 +57,7 @@ const links = [
 ]
 
 export default function Sidebar() {
-  const [abierto, setAbierto] = useState(true)
+  const [abierto, setAbierto] = useState(false)
 
   return (
     <aside className={`${abierto ? 'w-64' : 'w-16'} bg-primary text-white flex flex-col min-h-screen transition-all duration-200`}>
