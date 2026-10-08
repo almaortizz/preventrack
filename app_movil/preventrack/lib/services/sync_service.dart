@@ -89,8 +89,18 @@ class SyncService {
     };
   }
 
-  /// Subir operaciones que se hicieron offline
-  static Future<Map<String, dynamic>> subirPendientes() async {
+  static Future<Map<String, dynamic>>? _subidaEnCurso;
+
+  /// Subir operaciones que se hicieron offline.
+  /// Si ya hay una subida en curso (p. ej. desde el dashboard y el mapa a
+  /// la vez) se reutiliza, para no enviar dos veces la misma operación.
+  static Future<Map<String, dynamic>> subirPendientes() {
+    return _subidaEnCurso ??= _subirPendientes().whenComplete(
+      () => _subidaEnCurso = null,
+    );
+  }
+
+  static Future<Map<String, dynamic>> _subirPendientes() async {
     if (!DatabaseService.isAvailable) {
       return {'success': false, 'subidas': 0, 'fallidas': 0};
     }

@@ -50,20 +50,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!DatabaseService.isAvailable) return;
 
     final pendientes = await DatabaseService.contarOperacionesPendientes();
-    if (pendientes == 0) return;
+    if (!mounted) return;
+    // Pudo haberse subido desde otra pantalla (p. ej. el mapa)
+    if (pendientes == 0) {
+      if (_pendientesSync != 0) setState(() => _pendientesSync = 0);
+      return;
+    }
 
     setState(() => _pendientesSync = pendientes);
 
     // Intentar sincronizar
     final resultado = await SyncService.subirPendientes();
+    // Las que ya no aplican se quitan de la cola sin contar como subidas,
+    // así que se vuelve a contar lo que realmente queda
+    final restantes = await DatabaseService.contarOperacionesPendientes();
 
     if (!mounted) return;
 
+    setState(() => _pendientesSync = restantes);
+
     if (resultado['subidas'] > 0) {
+      final subidas = resultado['subidas'] as int;
       setState(() {
         _syncMensaje =
-            '${resultado['subidas']} pedido${resultado['subidas'] == 1 ? '' : 's'} sincronizado${resultado['subidas'] == 1 ? '' : 's'} correctamente';
-        _pendientesSync = 0;
+            '${_operaciones(subidas)} sincronizada${subidas == 1 ? '' : 's'} correctamente';
       });
       // Recargar dashboard sin mostrar spinner
       try {
@@ -76,12 +86,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       Future.delayed(const Duration(seconds: 4), () {
         if (mounted) setState(() => _syncMensaje = null);
       });
-    } else if (resultado['fallidas'] > 0) {
-      setState(() {
-        _pendientesSync = resultado['fallidas'];
-      });
     }
   }
+
+  // Al deslizar hacia abajo: subir lo pendiente y recargar
+  Future<void> _refrescar() async {
+    await _sincronizarPendientes();
+    await _cargarDashboard();
+  }
+
+  String _operaciones(int n) => n == 1 ? '1 operación' : '$n operaciones';
 
   void _mostrarSelectorCliente() async {
     final result = await _api.get('clientes');
@@ -198,7 +212,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Stack(
       children: [
         RefreshIndicator(
-          onRefresh: _cargarDashboard,
+          onRefresh: _refrescar,
           color: AppColors.primary,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -284,7 +298,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '$_pendientesSync pedido${_pendientesSync == 1 ? '' : 's'} pendiente${_pendientesSync == 1 ? '' : 's'} de sincronizar',
+                            '${_operaciones(_pendientesSync)} pendiente${_pendientesSync == 1 ? '' : 's'} de sincronizar',
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.warning,

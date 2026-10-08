@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/database_service.dart';
+import '../services/sync_service.dart';
 import '../services/ubicacion_service.dart';
 import 'catalogo_productos_screen.dart';
 
@@ -50,6 +51,14 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
 
   Future<void> _cargarRuta() async {
     setState(() => _isLoading = true);
+
+    // Si quedó algo en la cola (sin conexión), intentar subirlo antes de
+    // pedir la ruta, para que el mapa ya muestre el estado del servidor
+    if (DatabaseService.isAvailable &&
+        await DatabaseService.contarOperacionesPendientes() > 0) {
+      await SyncService.subirPendientes();
+    }
+
     try {
       final result = await _api.get('ruta-del-dia');
       if (result['statusCode'] == 200) {
