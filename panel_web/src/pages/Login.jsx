@@ -27,7 +27,8 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-tertiary px-4">
+    <div className="min-h-screen flex flex-col bg-tertiary">
+     <div className="flex-1 flex items-center justify-center px-4">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg p-8">
       <div className="flex justify-center mb-4">
      <img src="/logo.png" alt="PreventTrack" className="h-24 w-24" />
@@ -92,6 +93,12 @@ export default function Login() {
           </button>
         </form>
       </div>
+     </div>
+      <footer className="text-center py-5">
+        <span className="inline-block border-t border-neutral-300 pt-3 px-2 text-sm text-neutral-500">
+          © 2026 Sistema Web PreventTrack
+        </span>
+      </footer>
     </div>
   )
 }

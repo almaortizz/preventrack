@@ -107,6 +107,17 @@ export default function Rutas() {
     ])
   }
 
+  function agregarTodasLasEntregas() {
+    setParadas((prev) => [
+      ...prev,
+      ...pedidosParaElegir.map((venta) => ({
+        domicilio_id: venta.domicilio_id,
+        venta_id: venta.id,
+        texto: `${venta.numero_orden} — ${venta.domicilio?.cliente?.nombre_negocio || '—'} (${venta.domicilio?.direccion || '—'})`,
+      })),
+    ])
+  }
+
   function agregarParadaVisita() {
     if (!domicilioTemp) return
     const cliente = clientes.find((c) => c.id === Number(clienteTemp))
@@ -382,9 +393,20 @@ export default function Rutas() {
 
               {usuarioId && tipoRuta === 'entrega' && (
                 <div className="border-t border-neutral-100 pt-3">
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    Pedidos pendientes de entrega para este preventista
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Pedidos pendientes de entrega para este preventista
+                    </label>
+                    {pedidosParaElegir.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={agregarTodasLasEntregas}
+                        className="text-secondary text-xs font-semibold hover:underline"
+                      >
+                        + Agregar todos
+                      </button>
+                    )}
+                  </div>
                   {cargandoPedidos ? (
                     <p className="text-sm text-neutral-400">Buscando pedidos...</p>
                   ) : pedidosParaElegir.length ? (
@@ -422,8 +444,13 @@ export default function Rutas() {
                     <select
                       value={clienteTemp}
                       onChange={(e) => {
-                        setClienteTemp(e.target.value)
-                        setDomicilioTemp('')
+                        const id = e.target.value
+                        setClienteTemp(id)
+                        // Selecciona sola la dirección principal (o la única) del cliente.
+                        const cliente = clientes.find((c) => c.id === Number(id))
+                        const doms = cliente?.domicilios || []
+                        const elegido = doms.find((d) => d.es_principal) || doms[0]
+                        setDomicilioTemp(elegido ? String(elegido.id) : '')
                       }}
                       className="flex-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
                     >

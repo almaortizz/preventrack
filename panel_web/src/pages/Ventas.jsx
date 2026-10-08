@@ -531,9 +531,18 @@ export default function Ventas() {
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Cliente</label>
                 <select
                   value={form.cliente_id}
-                  onChange={(e) =>
-                    setForm({ ...form, cliente_id: e.target.value, domicilio_id: '' })
-                  }
+                  onChange={(e) => {
+                    const id = e.target.value
+                    // Selecciona sola la dirección principal (o la única) del cliente.
+                    const cli = clientes.find((c) => c.id === Number(id))
+                    const doms = cli?.domicilios || []
+                    const elegido = doms.find((d) => d.es_principal) || doms[0]
+                    setForm({
+                      ...form,
+                      cliente_id: id,
+                      domicilio_id: elegido ? String(elegido.id) : '',
+                    })
+                  }}
                   className="w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary"
                   required
                 >
