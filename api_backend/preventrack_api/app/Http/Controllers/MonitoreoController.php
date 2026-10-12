@@ -25,7 +25,7 @@ class MonitoreoController extends Controller
 
             $jornadaActiva = $jornada && $jornada->hora_inicio && !$jornada->hora_fin;
 
-            $ruta = Ruta::with('detalle')
+            $ruta = Ruta::with('detalle.domicilio.cliente')
                 ->where('usuario_id', $p->id)
                 ->where('fecha', $hoy)
                 ->first();
@@ -69,6 +69,21 @@ class MonitoreoController extends Controller
                     'total_paradas' => $totalParadas,
                     'paradas_visitadas' => $paradasVisitadas,
                     'estado' => $ruta->estado ?? null,
+                    'paradas' => $ruta
+                        ? $ruta->detalle
+                            ->sortBy('orden_visita')
+                            ->filter(fn ($d) => $d->domicilio && $d->domicilio->latitud && $d->domicilio->longitud)
+                            ->map(fn ($d) => [
+                                'orden' => $d->orden_visita,
+                                'estado' => $d->estado,
+                                'cliente' => $d->domicilio->cliente->nombre_negocio ?? 'Cliente',
+                                'direccion' => $d->domicilio->direccion,
+                                'tipo' => $d->venta_id ? 'Entrega' : 'Visita',
+                                'latitud' => (float) $d->domicilio->latitud,
+                                'longitud' => (float) $d->domicilio->longitud,
+                            ])
+                            ->values()
+                        : [],
                 ],
             ];
         });
