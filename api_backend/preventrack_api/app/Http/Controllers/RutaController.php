@@ -88,6 +88,7 @@ class RutaController extends Controller
             'latitud'   => 'nullable|numeric|between:-90,90',
             'longitud'  => 'nullable|numeric|between:-180,180',
             'precision' => 'nullable|numeric|min:0',
+            'fecha_hora_registro' => 'nullable|date',
         ]);
 
         if (!$ruta->puedeAtender($request->user())) {
@@ -109,7 +110,8 @@ class RutaController extends Controller
             Visita::create([
                 'usuario_id'   => $request->user()->id,
                 'domicilio_id' => $detalle->domicilio_id,
-                'fecha_hora'   => now(),
+                // Hora real de la visita (si fue sin conexión, llega después)
+                'fecha_hora'   => $this->momentoRegistro($datos['fecha_hora_registro'] ?? null),
                 'latitud'      => $lat,
                 'longitud'     => $lng,
                 'precision_m'  => $datos['precision'] ?? null,

@@ -11,6 +11,7 @@ import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/sync_service.dart';
 import '../services/ubicacion_service.dart';
+import '../widgets/aviso_rechazos.dart';
 import 'catalogo_productos_screen.dart';
 
 class MapaRutaScreen extends StatefulWidget {
@@ -57,6 +58,7 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
     if (DatabaseService.isAvailable &&
         await DatabaseService.contarOperacionesPendientes() > 0) {
       await SyncService.subirPendientes();
+      if (mounted) await mostrarRechazosSincronizacion(context);
     }
 
     try {
@@ -402,6 +404,8 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
       'latitud': posicion?.latitude,
       'longitud': posicion?.longitude,
       'precision': posicion?.accuracy,
+      // Hora real de la visita (si queda en la cola, se envía después)
+      'fecha_hora_registro': DateTime.now().toUtc().toIso8601String(),
       // Solo lo usa la app para reflejar la parada mientras está en la cola
       'detalle_ruta_id': paradaId,
     };

@@ -108,9 +108,12 @@ class DashboardController extends Controller
         $hoy = Carbon::now('America/Mexico_City')->toDateString();
         $userId = auth('sanctum')->id();
 
+        // Solo rutas de visita: las de entrega (paradas con pedido) se
+        // atienden desde el mapa de entregas
         $ruta = \App\Models\Ruta::with(['detalle.domicilio.cliente'])
             ->where('usuario_id', $userId)
             ->where('fecha', $hoy)
+            ->whereDoesntHave('detalle', fn ($q) => $q->whereNotNull('venta_id'))
             ->first();
 
         if (!$ruta) {

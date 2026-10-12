@@ -11,6 +11,7 @@ class RegistroGps extends Model
     protected $fillable = [
         'usuario_id', 'venta_id', 'detalle_ruta_id', 'tipo',
         'latitud', 'longitud', 'precision_m', 'distancia_m',
+        'created_at', // hora real si el registro se hizo sin conexión
     ];
 
     public function usuario() { return $this->belongsTo(Usuario::class, 'usuario_id'); }

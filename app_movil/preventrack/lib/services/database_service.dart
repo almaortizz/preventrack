@@ -21,12 +21,16 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _crearTablas,
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: se guarda la imagen del producto para el modo sin conexión.
         if (oldVersion < 2) {
           await db.execute('ALTER TABLE productos ADD COLUMN imagen TEXT');
+        }
+        // v3: lista de entregas para el modo sin conexión.
+        if (oldVersion < 3) {
+          await _crearTablaEntregas(db);
         }
       },
     );
@@ -82,6 +86,17 @@ class DatabaseService {
         metodo TEXT,
         body TEXT,
         fecha_creacion TEXT
+      )
+    ''');
+
+    await _crearTablaEntregas(db);
+  }
+
+  static Future<void> _crearTablaEntregas(Database db) async {
+    await db.execute('''
+      CREATE TABLE entregas (
+        id INTEGER PRIMARY KEY,
+        datos TEXT
       )
     ''');
   }
@@ -227,6 +242,27 @@ class DatabaseService {
   }
 
   // ═══════════════════════════════════════════
+  //  ENTREGAS (pedidos en ruta del repartidor)
+  // ═══════════════════════════════════════════
+
+  static Future<void> guardarEntregas(List<dynamic> entregas) async {
+    if (!isAvailable) return;
+    final db = await database;
+
+    await db.delete('entregas');
+    await db.insert('entregas', {'id': 1, 'datos': jsonEncode(entregas)});
+  }
+
+  static Future<List<dynamic>> obtenerEntregas() async {
+    if (!isAvailable) return [];
+    final db = await database;
+    final rows = await db.query('entregas', limit: 1);
+
+    if (rows.isEmpty) return [];
+    return jsonDecode(rows.first['datos'] as String) as List<dynamic>;
+  }
+
+  // ═══════════════════════════════════════════
   //  OPERACIONES PENDIENTES (SYNC)
   // ═══════════════════════════════════════════
 
@@ -280,6 +316,7 @@ class DatabaseService {
     await db.delete('productos');
     await db.delete('categorias');
     await db.delete('ruta_del_dia');
+    await db.delete('entregas');
     await db.delete('operaciones_pendientes');
   }
 }

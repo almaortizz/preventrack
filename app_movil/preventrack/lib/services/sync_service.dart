@@ -142,6 +142,23 @@ class SyncService {
           // La parada ya quedó visitada (p. ej. por un pedido que se subió
           // antes); la visita en cola ya no aplica
           await DatabaseService.eliminarOperacionPendiente(op['id'] as int);
+        } else if (_esOperacionEntrega(op['tipo']) &&
+            (result['statusCode'] == 422 || result['statusCode'] == 404)) {
+          // El pedido cambió en la oficina mientras no había conexión
+          // (cancelado, reasignado, borrado): ya no se puede registrar y
+          // reintentarlo no sirve. Se quita de la cola y se avisa.
+          await DatabaseService.eliminarOperacionPendiente(op['id'] as int);
+          final accion = op['tipo'] == 'entregar_pedido'
+              ? 'la entrega'
+              : 'el "no entregado"';
+          final numero = body?['numero_orden'] ?? '';
+          final motivo =
+              (result['data'] is Map ? result['data']['message'] : null) ??
+              'El pedido ya no está en ruta.';
+          _rechazos.add(
+            'No se pudo registrar $accion del pedido $numero. $motivo '
+            'Avisa a la oficina.',
+          );
         } else {
           fallidas++;
         }
@@ -155,5 +172,54 @@ class SyncService {
       'subidas': subidas,
       'fallidas': fallidas,
     };
+  }
+
+  // ═══════════════════════════════════════════
+  //  ENTREGAS SIN CONEXIÓN
+  // ═══════════════════════════════════════════
+
+  static bool _esOperacionEntrega(Object? tipo) =>
+      tipo == 'entregar_pedido' || tipo == 'no_entregar_pedido';
+
+  // Avisos de entregas que la API rechazó al sincronizar
+  static final List<String> _rechazos = [];
+
+  /// Devuelve los avisos pendientes de mostrar y los limpia
+  static List<String> tomarRechazos() {
+    final avisos = List<String>.from(_rechazos);
+    _rechazos.clear();
+    return avisos;
+  }
+
+  /// Aplica a la lista de entregas lo que se registró sin conexión y sigue
+  /// en la cola: las entregadas quedan marcadas (pendientes de sincronizar)
+  /// y las "no entregadas" se quitan, igual que cuando hay conexión.
+  static Future<List<dynamic>> aplicarEntregasPendientes(
+    List<dynamic> entregas,
+  ) async {
+    if (!DatabaseService.isAvailable) return entregas;
+
+    final entregadas = <Object?>{};
+    final noEntregadas = <Object?>{};
+    for (final op in await DatabaseService.obtenerOperacionesPendientes()) {
+      if (!_esOperacionEntrega(op['tipo'])) continue;
+      final bodyStr = op['body'] as String?;
+      if (bodyStr == null) continue;
+      final ventaId = (jsonDecode(bodyStr) as Map<String, dynamic>)['venta_id'];
+      if (op['tipo'] == 'entregar_pedido') {
+        entregadas.add(ventaId);
+      } else {
+        noEntregadas.add(ventaId);
+      }
+    }
+
+    return entregas.where((e) => !noEntregadas.contains(e['id'])).map((e) {
+      if (!entregadas.contains(e['id'])) return e;
+      return {
+        ...(e as Map<String, dynamic>),
+        'estado': 'entregado',
+        'pendiente_sync': true,
+      };
+    }).toList();
   }
 }

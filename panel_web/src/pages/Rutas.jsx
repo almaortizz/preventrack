@@ -184,9 +184,27 @@ export default function Rutas() {
     }
   }
 
+  // Etiqueta y colores del estado de una parada. En las de entrega,
+  // "visitada" es Entregado y "no_disponible" es No entregado.
+  function estadoParada(d) {
+    if (d.estado === 'visitada') {
+      return { texto: d.venta_id ? 'Entregado' : 'Visitada', clase: 'bg-green-100 text-green-700' }
+    }
+    if (d.estado === 'no_disponible') {
+      return {
+        texto: d.venta_id ? 'No entregado' : 'No disponible',
+        clase: 'bg-orange-100 text-orange-700',
+      }
+    }
+    return { texto: 'Pendiente', clase: 'bg-yellow-100 text-yellow-700' }
+  }
+
   async function marcarVisitada(ruta, detalleId) {
     try {
-      await client.post(`/rutas/${ruta.id}/visitar/${detalleId}`)
+      // Desde el panel se registra como visita sin venta (sin GPS)
+      await client.post(`/rutas/${ruta.id}/visitar/${detalleId}`, {
+        resultado: 'sin_venta',
+      })
       cargar()
     } catch {
       alert('No se pudo marcar la parada como visitada.')
@@ -315,16 +333,15 @@ export default function Rutas() {
                                   <td className="py-2">
                                     <span
                                       className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${
-                                        d.estado === 'visitada'
-                                          ? 'bg-green-100 text-green-700'
-                                          : 'bg-yellow-100 text-yellow-700'
+                                        estadoParada(d).clase
                                       }`}
                                     >
-                                      {d.estado === 'visitada' ? 'Visitada' : 'Pendiente'}
+                                      {estadoParada(d).texto}
                                     </span>
                                   </td>
                                   <td className="py-2 text-right">
-                                    {d.estado !== 'visitada' && (
+                                    {/* Las entregas se marcan desde la app, con GPS */}
+                                    {d.estado !== 'visitada' && !d.venta_id && (
                                       <button
                                         onClick={() => marcarVisitada(r, d.id)}
                                         className="text-green-600 font-medium hover:underline"

@@ -98,7 +98,9 @@ class VentaController extends Controller
                 'numero_orden' => 'PED-' . strtoupper(uniqid()),
                 'domicilio_id' => $datos['domicilio_id'],
                 'preventista_vendedor_id' => $datos['preventista_vendedor_id'],
-                'fecha_hora' => now(),
+                // Hora en que se terminó de levantar el pedido (si se hizo
+                // sin conexión, llega después al sincronizar)
+                'fecha_hora' => $this->momentoRegistro($datos['fecha_fin_creacion'] ?? null),
                 'total' => $totalFinal,
                 'descuento' => $descuento,
                 'estado' => 'pendiente',
@@ -160,7 +162,7 @@ class VentaController extends Controller
         Visita::create([
             'usuario_id'   => $venta->preventista_vendedor_id,
             'domicilio_id' => $venta->domicilio_id,
-            'fecha_hora'   => now(),
+            'fecha_hora'   => $this->momentoRegistro($datos['fecha_fin_creacion'] ?? null),
             'latitud'      => $lat,
             'longitud'     => $lng,
             'precision_m'  => $datos['precision'] ?? null,
@@ -227,6 +229,7 @@ class VentaController extends Controller
             'latitud'   => 'nullable|numeric|between:-90,90',
             'longitud'  => 'nullable|numeric|between:-180,180',
             'precision' => 'nullable|numeric|min:0',
+            'fecha_hora_registro' => 'nullable|date',
         ]);
 
         if ($venta->estado !== 'en_ruta') {
@@ -235,16 +238,24 @@ class VentaController extends Controller
             ]);
         }
 
-        $venta->update([
-            'estado' => 'entregado',
-            'fecha_entrega' => now()->toDateString(),
-            'hora_entrega' => now()->toTimeString(),
-        ]);
+        // Hora en que se entregó (si fue sin conexión, llega después)
+        $momento = $this->momentoRegistro($request->input('fecha_hora_registro'));
 
-        // Guardar dónde estaba el preventista al entregar
-        RegistroGps::desdeRequest($request, 'entrega', $venta->domicilio, [
-            'venta_id' => $venta->id,
-        ]);
+        DB::transaction(function () use ($request, $venta, $momento) {
+            $venta->update([
+                'estado' => 'entregado',
+                'fecha_entrega' => $momento->toDateString(),
+                'hora_entrega' => $momento->toTimeString(),
+            ]);
+
+            // Guardar dónde estaba el preventista al entregar
+            RegistroGps::desdeRequest($request, 'entrega', $venta->domicilio, [
+                'venta_id' => $venta->id,
+                'created_at' => $momento,
+            ]);
+
+            $this->actualizarParadaEntrega($venta, 'visitada');
+        });
 
         return response()->json($venta);
     }
@@ -256,6 +267,7 @@ class VentaController extends Controller
             'latitud'   => 'nullable|numeric|between:-90,90',
             'longitud'  => 'nullable|numeric|between:-180,180',
             'precision' => 'nullable|numeric|min:0',
+            'fecha_hora_registro' => 'nullable|date',
         ]);
 
         if ($venta->estado !== 'en_ruta') {
@@ -264,14 +276,43 @@ class VentaController extends Controller
             ]);
         }
 
-        $venta->update(['estado' => 'pendiente']);
+        $momento = $this->momentoRegistro($request->input('fecha_hora_registro'));
 
-        // Guardar dónde estaba el preventista al reportar que no se entregó
-        RegistroGps::desdeRequest($request, 'no_entregado', $venta->domicilio, [
-            'venta_id' => $venta->id,
-        ]);
+        DB::transaction(function () use ($request, $venta, $momento) {
+            $venta->update(['estado' => 'pendiente']);
+
+            // Guardar dónde estaba el preventista al reportar que no se entregó
+            RegistroGps::desdeRequest($request, 'no_entregado', $venta->domicilio, [
+                'venta_id' => $venta->id,
+                'created_at' => $momento,
+            ]);
+
+            // La parada queda atendida ("No entregado" en el panel); el pedido
+            // regresa a pendiente para asignarlo de nuevo
+            $this->actualizarParadaEntrega($venta, 'no_disponible');
+        });
 
         return response()->json($venta);
+    }
+
+    // Refleja la entrega en la parada de la ruta de entregas que lleva este
+    // pedido (la más reciente), para que el panel vea el avance de la ruta
+    private function actualizarParadaEntrega(Venta $venta, string $estado): void
+    {
+        $sinAtender = $estado === 'visitada' ? ['pendiente', 'no_disponible'] : ['pendiente'];
+
+        $detalle = DetalleRuta::with('ruta')
+            ->where('venta_id', $venta->id)
+            ->whereIn('estado', $sinAtender)
+            ->latest('id')
+            ->first();
+
+        if (!$detalle) {
+            return;
+        }
+
+        $detalle->update(['estado' => $estado]);
+        $detalle->ruta->actualizarEstado();
     }
 
     // Cancelar el pedido (solo si aún no ha sido entregado)

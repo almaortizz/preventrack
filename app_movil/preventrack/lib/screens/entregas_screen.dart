@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../config/app_theme.dart';
+import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/database_service.dart';
+import '../services/sync_service.dart';
+import '../widgets/aviso_rechazos.dart';
 import 'detalle_entrega_screen.dart';
 import 'mapa_entregas_screen.dart';
 
@@ -15,6 +20,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
   final ApiService _api = ApiService();
   List<dynamic> _entregas = [];
   bool _isLoading = true;
+  bool _modoOffline = false;
 
   @override
   void initState() {
@@ -24,19 +30,51 @@ class _EntregasScreenState extends State<EntregasScreen> {
 
   Future<void> _cargarEntregas() async {
     setState(() => _isLoading = true);
+    final usuarioId = Provider.of<AuthProvider>(
+      context,
+      listen: false,
+    ).usuario?['id'];
+
+    // Subir primero lo que se registró sin conexión
+    if (DatabaseService.isAvailable &&
+        await DatabaseService.contarOperacionesPendientes() > 0) {
+      await SyncService.subirPendientes();
+      if (mounted) await mostrarRechazosSincronizacion(context);
+    }
+
+    // Solo los pedidos que este usuario tiene asignados para entregar
+    final filtro = usuarioId != null
+        ? '&preventista_entrega_id=$usuarioId'
+        : '';
+    var entregas = <dynamic>[];
+    var offline = false;
     try {
-      final result = await _api.get('ventas?estado=en_ruta');
+      final result = await _api.get(
+        'ventas?estado=en_ruta$filtro&per_page=100',
+      );
       if (result['statusCode'] == 200) {
         final data = result['data'];
-        setState(() {
-          _entregas = data is List ? data : (data['data'] ?? []);
-          _isLoading = false;
-        });
+        entregas = data is List ? data : (data['data'] ?? []);
+        // Respaldo para poder trabajar sin conexión
+        await DatabaseService.guardarEntregas(entregas);
       }
     } catch (e) {
-      setState(() => _isLoading = false);
+      // Sin conexión: la última lista guardada
+      entregas = await DatabaseService.obtenerEntregas();
+      offline = true;
     }
+
+    entregas = await SyncService.aplicarEntregasPendientes(entregas);
+    if (!mounted) return;
+    setState(() {
+      _entregas = entregas;
+      _modoOffline = offline;
+      _isLoading = false;
+    });
   }
+
+  int get _pendientes =>
+      _entregas.where((e) => e['estado'] != 'entregado').length;
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +114,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        '${_entregas.length} pedido${_entregas.length == 1 ? '' : 's'} en ruta',
+                        '$_pendientes pedido${_pendientes == 1 ? '' : 's'} en ruta',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -85,14 +123,16 @@ class _EntregasScreenState extends State<EntregasScreen> {
                       ),
                       const Spacer(),
                       GestureDetector(
-                        onTap: () {
-                          Navigator.push(
+                        onTap: () async {
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) =>
                                   MapaEntregasScreen(entregas: _entregas),
                             ),
                           );
+                          // Recargar al volver (entregas hechas en el mapa)
+                          if (mounted) _cargarEntregas();
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -126,6 +166,19 @@ class _EntregasScreenState extends State<EntregasScreen> {
                     ],
                   ),
                 ),
+                if (_modoOffline)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    color: AppColors.warning.withValues(alpha: 0.1),
+                    child: const Text(
+                      'Sin conexión — se muestra la última lista guardada',
+                      style: TextStyle(fontSize: 12, color: AppColors.warning),
+                    ),
+                  ),
                 // Lista
                 Expanded(
                   child: ListView.builder(
@@ -144,6 +197,9 @@ class _EntregasScreenState extends State<EntregasScreen> {
   Widget _buildEntregaCard(Map<String, dynamic> entrega) {
     final numero = entrega['numero_orden'] ?? '';
     final total = entrega['total'] ?? '0';
+    // Entregada sin conexión, en espera de sincronizar
+    final entregada = entrega['estado'] == 'entregado';
+    final color = entregada ? AppColors.success : AppColors.secondary;
 
     // Nombre del cliente
     String clienteNombre = 'Cliente';
@@ -187,12 +243,14 @@ class _EntregasScreenState extends State<EntregasScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppColors.secondary.withValues(alpha: 0.08),
+                color: color.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(
-                Icons.local_shipping_outlined,
-                color: AppColors.secondary,
+              child: Icon(
+                entregada
+                    ? Icons.cloud_upload_outlined
+                    : Icons.local_shipping_outlined,
+                color: color,
                 size: 22,
               ),
             ),
@@ -253,6 +311,17 @@ class _EntregasScreenState extends State<EntregasScreen> {
                       ),
                     ],
                   ),
+                  if (entregada) ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Entregado · pendiente de sincronizar',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.success,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

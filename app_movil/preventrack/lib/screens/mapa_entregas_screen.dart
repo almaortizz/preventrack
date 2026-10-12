@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
+import '../services/database_service.dart';
 
 class MapaEntregasScreen extends StatefulWidget {
   final List<dynamic> entregas;
@@ -30,6 +31,7 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
 
   late List<dynamic> _entregas;
   int _entregadas = 0;
+  bool _procesando = false;
 
   // Ruta OSRM (líneas por calles)
   List<LatLng> _rutaCalles = [];
@@ -39,6 +41,8 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
   void initState() {
     super.initState();
     _entregas = List.from(widget.entregas);
+    // Pueden venir entregadas sin conexión, en espera de sincronizar
+    _entregadas = _entregas.where((e) => e['estado'] == 'entregado').length;
     _cargarRutaOSRM();
   }
 
@@ -188,6 +192,7 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
         'total': entrega['total'] ?? '0',
         'numero': entrega['numero_orden'] ?? '',
         'estado': entrega['estado'] ?? 'en_ruta',
+        'pendiente_sync': entrega['pendiente_sync'] == true,
       });
     }
 
@@ -458,54 +463,117 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
       ),
     );
 
-    if (confirmar != true) return;
-
-    // Capturar GPS antes de enviar (requisito anti-fraude)
-    final ubicacion = await _obtenerUbicacionRegistro();
-    if (!mounted) return;
-    if (ubicacion == null && !kIsWeb) {
-      _avisarSinGps();
-      return;
-    }
+    if (confirmar != true || _procesando) return;
+    _procesando = true;
 
     try {
-      final result = await _api.post(
-        'ventas/$ventaId/marcar-entregado',
-        body: ubicacion,
-      );
-      if (!mounted) return;
+      // Capturar GPS antes de enviar (requisito anti-fraude)
+      final body = await _datosRegistro(ventaId);
+      if (!mounted || body == null) return;
+      final endpoint = 'ventas/$ventaId/marcar-entregado';
 
-      if (result['statusCode'] == 200) {
-        Navigator.pop(sheetContext);
-        setState(() {
-          final index = _entregas.indexWhere((e) => e['id'] == ventaId);
-          if (index != -1) {
-            _entregas[index]['estado'] = 'entregado';
-          }
-          _entregadas++;
-        });
+      try {
+        final result = await _api.post(endpoint, body: body);
+        if (!mounted) return;
+
+        if (result['statusCode'] == 200) {
+          if (sheetContext.mounted) Navigator.pop(sheetContext);
+          _marcarEntregadaLocal(ventaId, pendienteSync: false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pedido entregado correctamente'),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          final msg = result['data']?['message'] ?? 'Error al marcar entrega';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+          );
+        }
+      } catch (e) {
+        // Sin conexión: se guarda en la cola con su GPS y hora real
+        if (!await _guardarEnCola('entregar_pedido', endpoint, body)) return;
+        if (!mounted) return;
+        if (sheetContext.mounted) Navigator.pop(sheetContext);
+        _marcarEntregadaLocal(ventaId, pendienteSync: true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Pedido entregado correctamente'),
-            backgroundColor: AppColors.success,
-            duration: Duration(seconds: 2),
+            content: Text(
+              'Sin conexión. La entrega se enviará cuando haya conexión.',
+            ),
+            backgroundColor: AppColors.warning,
+            duration: Duration(seconds: 3),
           ),
         );
-      } else {
-        final msg = result['data']?['message'] ?? 'Error al marcar entrega';
+      }
+    } finally {
+      _procesando = false;
+    }
+  }
+
+  // GPS + hora real + datos para reconocer la operación si queda en la cola.
+  // Regresa null si no hay GPS (no se permite registrar sin ubicación).
+  Future<Map<String, dynamic>?> _datosRegistro(int ventaId) async {
+    final ubicacion = await _obtenerUbicacionRegistro();
+    if (!mounted) return null;
+    if (ubicacion == null && !kIsWeb) {
+      _avisarSinGps();
+      return null;
+    }
+
+    final entrega = _entregas.firstWhere(
+      (e) => e['id'] == ventaId,
+      orElse: () => <String, dynamic>{},
+    );
+    return {
+      ...?ubicacion,
+      'fecha_hora_registro': DateTime.now().toUtc().toIso8601String(),
+      // Solo los usa la app (la API los ignora)
+      'venta_id': ventaId,
+      'numero_orden': entrega['numero_orden'],
+    };
+  }
+
+  // Guarda la operación en la cola; false si no hay base local (web)
+  Future<bool> _guardarEnCola(
+    String tipo,
+    String endpoint,
+    Map<String, dynamic> body,
+  ) async {
+    if (!DatabaseService.isAvailable) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+          const SnackBar(
+            content: Text('Error de conexión'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error de conexión'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      return false;
     }
+    await DatabaseService.guardarOperacionPendiente(
+      tipo: tipo,
+      endpoint: endpoint,
+      metodo: 'POST',
+      body: body,
+    );
+    return true;
+  }
+
+  void _marcarEntregadaLocal(int ventaId, {required bool pendienteSync}) {
+    setState(() {
+      final index = _entregas.indexWhere((e) => e['id'] == ventaId);
+      if (index != -1) {
+        _entregas[index] = {
+          ...(_entregas[index] as Map<String, dynamic>),
+          'estado': 'entregado',
+          'pendiente_sync': pendienteSync,
+        };
+      }
+      _entregadas++;
+    });
   }
 
   Future<void> _marcarNoEntregado(
@@ -540,51 +608,64 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
       ),
     );
 
-    if (confirmar != true) return;
-
-    // Capturar GPS antes de enviar (requisito anti-fraude)
-    final ubicacion = await _obtenerUbicacionRegistro();
-    if (!mounted) return;
-    if (ubicacion == null && !kIsWeb) {
-      _avisarSinGps();
-      return;
-    }
+    if (confirmar != true || _procesando) return;
+    _procesando = true;
 
     try {
-      final result = await _api.post(
-        'ventas/$ventaId/marcar-no-entregado',
-        body: ubicacion,
-      );
-      if (!mounted) return;
+      // Capturar GPS antes de enviar (requisito anti-fraude)
+      final body = await _datosRegistro(ventaId);
+      if (!mounted || body == null) return;
+      final endpoint = 'ventas/$ventaId/marcar-no-entregado';
 
-      if (result['statusCode'] == 200) {
-        Navigator.pop(sheetContext);
-        setState(() {
-          _entregas.removeWhere((e) => e['id'] == ventaId);
-        });
-        _cargarRutaOSRM(); // Recalcular ruta
+      try {
+        final result = await _api.post(endpoint, body: body);
+        if (!mounted) return;
+
+        if (result['statusCode'] == 200) {
+          if (sheetContext.mounted) Navigator.pop(sheetContext);
+          _quitarEntregaLocal(ventaId);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pedido regresado a pendiente'),
+              backgroundColor: AppColors.warning,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          final msg = result['data']?['message'] ?? 'Error al actualizar';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+          );
+        }
+      } catch (e) {
+        // Sin conexión: se guarda en la cola con su GPS y hora real
+        if (!await _guardarEnCola('no_entregar_pedido', endpoint, body)) {
+          return;
+        }
+        if (!mounted) return;
+        if (sheetContext.mounted) Navigator.pop(sheetContext);
+        _quitarEntregaLocal(ventaId);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Pedido regresado a pendiente'),
+            content: Text(
+              'Sin conexión. Se registrará como no entregado cuando haya conexión.',
+            ),
             backgroundColor: AppColors.warning,
-            duration: Duration(seconds: 2),
+            duration: Duration(seconds: 3),
           ),
         );
-      } else {
-        final msg = result['data']?['message'] ?? 'Error al actualizar';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: AppColors.error),
-        );
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error de conexión'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+    } finally {
+      _procesando = false;
     }
+  }
+
+  // El pedido regresa a pendiente: sale de la ruta de este repartidor
+  void _quitarEntregaLocal(int ventaId) {
+    setState(() {
+      _entregas.removeWhere((e) => e['id'] == ventaId);
+    });
+    _cargarRutaOSRM(); // Recalcular ruta
   }
 
   // ═══════════════════════════════════════════
@@ -593,6 +674,7 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
 
   void _mostrarInfoEntrega(Map<String, dynamic> entrega) {
     final esEntregado = entrega['estado'] == 'entregado';
+    final pendienteSync = entrega['pendiente_sync'] == true;
 
     showModalBottomSheet(
       context: context,
@@ -669,6 +751,30 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
                             ),
                         ],
                       ),
+                      if (pendienteSync) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.cloud_upload_outlined,
+                              size: 14,
+                              color: AppColors.textPrimary.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Pendiente de sincronizar',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1025,8 +1131,10 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
                                     ),
                                     child: Center(
                                       child: esEntregado
-                                          ? const Icon(
-                                              Icons.check,
+                                          ? Icon(
+                                              entrega['pendiente_sync'] == true
+                                                  ? Icons.cloud_upload_outlined
+                                                  : Icons.check,
                                               color: Colors.white,
                                               size: 20,
                                             )

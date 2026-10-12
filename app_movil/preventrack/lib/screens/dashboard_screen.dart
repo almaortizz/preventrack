@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/sync_service.dart';
+import '../widgets/aviso_rechazos.dart';
 import 'detalle_pedido_screen.dart';
 import 'catalogo_productos_screen.dart';
 
@@ -68,6 +69,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!mounted) return;
 
     setState(() => _pendientesSync = restantes);
+    await mostrarRechazosSincronizacion(context);
+    if (!mounted) return;
 
     if (resultado['subidas'] > 0) {
       final subidas = resultado['subidas'] as int;
