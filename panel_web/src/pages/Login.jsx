@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import Footer from '../components/Footer'
 
 export default function Login() {
   const [usuario, setUsuario] = useState('')
@@ -94,11 +95,7 @@ export default function Login() {
         </form>
       </div>
      </div>
-      <footer className="text-center py-5">
-        <span className="inline-block border-t border-neutral-300 pt-3 px-2 text-sm text-neutral-500">
-          © 2026 Sistema Web PreventTrack
-        </span>
-      </footer>
+      <Footer />
     </div>
   )
 }

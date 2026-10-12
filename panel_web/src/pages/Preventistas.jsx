@@ -29,6 +29,66 @@ const iconoPreventista = new L.Icon({
   shadowSize: [41, 41],
 })
 
+const cacheRutasCalles = {}
+const COLOR_PARADA ={ visitada: '#2e7d32', no_disponible: '#f9a825' }
+
+// Dibuja las paradas numeradas de la ruta del día y la línea que las une.
+// Devuelve las capas creadas para poder quitarlas después.
+function dibujarParadas(mapa, paradas = [], colorLinea = '#00a8e8') {
+  const capas = []
+  if (!paradas.length) return capas
+
+  const puntosLinea = paradas.map((p) => [p.latitud, p.longitud])
+  const linea = L.polyline(puntosLinea, {
+    color: colorLinea,
+    weight: 4,
+    opacity: 0.8,
+  }).addTo(mapa)
+  capas.push(linea)
+
+  // Ajusta la línea para que siga las calles (OSRM). Mientras responde, se
+  // muestra la línea recta; si falla, se queda así.
+  if (puntosLinea.length > 1) {
+    const clave = puntosLinea.map((p) => p.join(',')).join(';')
+    const aplicar = (coords) => linea.setLatLngs(coords)
+    if (cacheRutasCalles[clave]) {
+      aplicar(cacheRutasCalles[clave])
+    } else {
+      const coordsUrl = puntosLinea.map(([lat, lng]) => `${lng},${lat}`).join(';')
+      fetch(
+        `https://router.project-osrm.org/route/v1/driving/${coordsUrl}?overview=full&geometries=geojson`,
+      )
+        .then((r) => r.json())
+        .then((d) => {
+          const geo = d?.routes?.[0]?.geometry?.coordinates
+          if (!geo) return
+          const coords = geo.map(([lng, lat]) => [lat, lng])
+          cacheRutasCalles[clave] = coords
+          aplicar(coords)
+        })
+        .catch(() => {})
+    }
+  }
+
+  paradas.forEach((p, i) => {
+    const color = COLOR_PARADA[p.estado] ?? '#00a8e8'
+    const icono = L.divIcon({
+      className: '',
+      html: `<div style="background:${color};color:#fff;width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">${p.orden ?? i + 1}</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+    })
+    capas.push(
+      L.marker([p.latitud, p.longitud], { icon: icono })
+        .addTo(mapa)
+        .bindPopup(
+          `<b>${p.orden ?? i + 1}. ${p.cliente}</b><br/>${p.tipo} · ${(p.estado || 'pendiente').replace('_', ' ')}<br/>${p.direccion ?? ''}`,
+        ),
+    )
+  })
+  return capas
+}
+
 function validarTelefono(telefono) {
   if (!telefono) return true
   return /^\d{10}$/.test(telefono)
@@ -95,6 +155,7 @@ export default function Preventistas() {
   const mapaIndividualRef = useRef(null)
   const mapaIndividualInstanciaRef = useRef(null)
   const marcadorIndividualRef = useRef(null)
+  const paradasIndRef = useRef([])
 
   function cargar() {
     setLoading(true)
@@ -376,6 +437,11 @@ export default function Preventistas() {
         marcadoresRef.current.push(marcador)
         puntos.push([m.ubicacion.latitud, m.ubicacion.longitud])
       }
+      const paradas = m.ruta?.paradas ?? []
+      marcadoresRef.current.push(
+        ...dibujarParadas(mapaInstanciaRef.current, paradas, m.color || '#00a8e8'),
+      )
+      paradas.forEach((p) => puntos.push([p.latitud, p.longitud]))
     })
 
     if (puntos.length) {
@@ -446,6 +512,10 @@ export default function Preventistas() {
       marcadorIndividualRef.current = null
     }
 
+    paradasIndRef.current.forEach((c) => c.remove())
+    paradasIndRef.current = []
+
+    const puntos = []
     if (ubicacionAbierta?.ubicacion) {
       const { latitud, longitud } = ubicacionAbierta.ubicacion
       marcadorIndividualRef.current = L.marker([latitud, longitud], {
@@ -453,8 +523,21 @@ export default function Preventistas() {
       })
         .addTo(mapaIndividualInstanciaRef.current)
         .bindPopup(`<b>${ubicacionAbierta.nombre}</b>`)
-        .openPopup()
-      mapaIndividualInstanciaRef.current.setView([latitud, longitud], 15)
+      puntos.push([latitud, longitud])
+    }
+
+    const paradas = ubicacionAbierta?.ruta?.paradas ?? []
+    paradasIndRef.current = dibujarParadas(
+      mapaIndividualInstanciaRef.current,
+      paradas,
+      ubicacionAbierta?.color || '#00a8e8',
+    )
+    paradas.forEach((p) => puntos.push([p.latitud, p.longitud]))
+
+    if (puntos.length > 1) {
+      mapaIndividualInstanciaRef.current.fitBounds(puntos, { padding: [30, 30], maxZoom: 16 })
+    } else if (puntos.length === 1) {
+      mapaIndividualInstanciaRef.current.setView(puntos[0], 15)
     }
   }, [ubicacionAbierta])
 

@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import Footer from '../components/Footer'
 
 export default function DashboardLayout() {
   return (
@@ -11,11 +12,7 @@ export default function DashboardLayout() {
         <main className="flex-1 p-6">
           <Outlet />
         </main>
-        <footer className="text-center py-5">
-          <span className="inline-block border-t border-neutral-300 pt-3 px-2 text-sm text-neutral-500">
-            © 2026 Sistema Web PreventTrack
-          </span>
-        </footer>
+        <Footer />
       </div>
     </div>
   )
