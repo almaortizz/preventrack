@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Cuota;
 use App\Models\DetalleRuta;
 use App\Models\Producto;
 use App\Models\RegistroGps;
@@ -255,6 +256,10 @@ class VentaController extends Controller
             ]);
 
             $this->actualizarParadaEntrega($venta, 'visitada');
+
+            // Si con esta venta el preventista alcanzó su cuota semanal
+            // (semana del pedido), se genera su comisión automáticamente
+            Cuota::vigente($venta->preventista_vendedor_id, $venta->fecha_hora)?->evaluar();
         });
 
         return response()->json($venta);

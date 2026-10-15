@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Ubicacion extends Model
 {
+    protected $table = 'ubicaciones';
+
     const UPDATED_AT = null;
 
     protected $fillable = [

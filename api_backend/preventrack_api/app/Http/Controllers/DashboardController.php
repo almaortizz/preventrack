@@ -21,35 +21,39 @@ class DashboardController extends Controller
         $inicioMes = Carbon::now('America/Mexico_City')->startOfMonth()->toDateString();
         $finMes = Carbon::now('America/Mexico_City')->endOfMonth()->toDateString();
 
-        // --- Contadores por estado ---
-        $pendientes = Venta::where('estado', 'pendiente')->count();
-        $enRuta = Venta::where('estado', 'en_ruta')->count();
+        // Todo lo del dashboard del preventista es de SUS pedidos
+        $userId = auth('sanctum')->id();
+        $misVentas = fn () => Venta::where('preventista_vendedor_id', $userId);
 
-        $entregadosHoy = Venta::where('estado', 'entregado')
+        // --- Contadores por estado ---
+        $pendientes = $misVentas()->where('estado', 'pendiente')->count();
+        $enRuta = $misVentas()->where('estado', 'en_ruta')->count();
+
+        $entregadosHoy = $misVentas()->where('estado', 'entregado')
             ->whereDate('fecha_entrega', $hoy)
             ->count();
 
-        $canceladosHoy = Venta::where('estado', 'cancelado')
+        $canceladosHoy = $misVentas()->where('estado', 'cancelado')
             ->whereDate('updated_at', $hoy)
             ->count();
 
         // --- Ventas en dinero ---
-        $totalVentasHoy = Venta::where('estado', 'entregado')
+        $totalVentasHoy = $misVentas()->where('estado', 'entregado')
             ->whereDate('fecha_entrega', $hoy)
             ->sum('total');
 
-        $totalVentasSemana = Venta::where('estado', 'entregado')
+        $totalVentasSemana = $misVentas()->where('estado', 'entregado')
             ->whereDate('fecha_entrega', '>=', $inicioSemana)
             ->whereDate('fecha_entrega', '<=', $finSemana)
             ->sum('total');
 
-        $totalVentasMes = Venta::where('estado', 'entregado')
+        $totalVentasMes = $misVentas()->where('estado', 'entregado')
             ->whereDate('fecha_entrega', '>=', $inicioMes)
             ->whereDate('fecha_entrega', '<=', $finMes)
             ->sum('total');
 
         // --- Últimos 10 pedidos ---
-        $ultimosPedidos = Venta::with(['domicilio', 'vendedor'])
+        $ultimosPedidos = $misVentas()->with(['domicilio', 'vendedor'])
             ->orderBy('created_at', 'desc')
             ->take(10)
             ->get();
@@ -59,14 +63,13 @@ class DashboardController extends Controller
         $totalProductos = Producto::count();
 
                 // --- Cuota semanal ---
-        $cuota = Cuota::where('fecha_inicio_semana', '<=', $hoy)
-            ->where('fecha_fin_semana', '>=', $hoy)
-            ->where('usuario_id', auth('sanctum')->id())
-            ->first();
+        $cuota = Cuota::vigente($userId, $hoy);
 
-        $ventasSemana = $totalVentasSemana;
         $cuotaData = null;
         if ($cuota) {
+            // Mismo criterio que la comisión: pedidos de la semana ya entregados
+            $ventasSemana = $cuota->ventasAlcanzadas();
+            $comision = $cuota->comisiones()->latest('id')->first();
             $cuotaData = [
                 'monto_objetivo' => round($cuota->monto_objetivo, 2),
                 'monto_comision' => round($cuota->monto_comision, 2),
@@ -74,6 +77,10 @@ class DashboardController extends Controller
                 'cumplida'       => $ventasSemana >= $cuota->monto_objetivo,
                 'porcentaje'     => $cuota->monto_objetivo > 0 ? round(($ventasSemana / $cuota->monto_objetivo) * 100, 1) : 0,
                 'faltante'       => round(max(0, $cuota->monto_objetivo - $ventasSemana), 2),
+                'comision'       => $comision ? [
+                    'monto'  => round($comision->monto, 2),
+                    'estado' => $comision->estado, // pendiente | pagada
+                ] : null,
             ];
         }
 
@@ -180,12 +187,10 @@ class DashboardController extends Controller
 
             $objetivo = $cuotaPrev ? $cuotaPrev->monto_objetivo : $cuotaObjetivo;
 
-            // La FK es preventista_vendedor_id, no usuario_id
-            $ventasPrev = Venta::where('preventista_vendedor_id', $prev->id)
-                ->where('estado', 'entregado')
-                ->whereDate('fecha_entrega', '>=', $inicioSemana)
-                ->whereDate('fecha_entrega', '<=', $finSemana)
-                ->sum('total');
+            // Mismo criterio que la comisión: pedidos de la semana ya entregados
+            $ventasPrev = $cuotaPrev
+                ? $cuotaPrev->ventasAlcanzadas()
+                : Cuota::ventasDeSemana($prev->id, $inicioSemana, $finSemana);
 
             $cumple = $ventasPrev >= $objetivo;
             if ($cumple) $cumplenCuota++;

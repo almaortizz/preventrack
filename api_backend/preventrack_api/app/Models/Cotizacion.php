@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Cotizacion extends Model
 {
+    protected $table = 'cotizaciones';
+
     protected $fillable = [
         'folio', 'domicilio_id', 'usuario_id', 'fecha_hora',
         'total', 'estado', 'venta_id',

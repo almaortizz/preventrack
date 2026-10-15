@@ -593,6 +593,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
               color: cumplida ? AppColors.success : AppColors.error,
             ),
           ),
+          // Comisión generada automáticamente al alcanzar la cuota
+          if (cuota['comision'] != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    cuota['comision']['estado'] == 'pagada'
+                        ? Icons.paid
+                        : Icons.paid_outlined,
+                    size: 18,
+                    color: AppColors.success,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Comisión de \$${_formatMonto(cuota['comision']['monto'])} — '
+                      '${cuota['comision']['estado'] == 'pagada' ? 'pagada' : 'pendiente de pago'}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.success,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

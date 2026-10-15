@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/database_service.dart';
+import '../services/jornada_service.dart';
 
 class MapaEntregasScreen extends StatefulWidget {
   final List<dynamic> entregas;
@@ -117,26 +118,8 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
     if (mounted) setState(() => _cargandoRuta = false);
   }
 
-  Future<bool> _tieneJornadaActiva() async {
-    try {
-      final result = await _api.get('jornadas');
-      if (result['statusCode'] == 200) {
-        final jornadas = result['data'] is List
-            ? result['data']
-            : (result['data']['data'] ?? []);
-        final hoy = DateTime.now().toIso8601String().substring(0, 10);
-        return jornadas.any(
-          (j) =>
-              j['fecha'] == hoy &&
-              j['hora_inicio'] != null &&
-              j['hora_fin'] == null,
-        );
-      }
-    } catch (_) {
-      return true;
-    }
-    return false;
-  }
+  // Jornada del usuario que inició sesión (incluye la iniciada sin conexión)
+  Future<bool> _tieneJornadaActiva() => JornadaService.tieneJornadaActiva();
 
   // ═══════════════════════════════════════════
   //  GOOGLE MAPS — CÓMO LLEGAR

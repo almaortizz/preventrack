@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../config/app_theme.dart';
-import '../services/api_service.dart';
+import '../services/jornada_service.dart';
 import '../services/ubicacion_service.dart';
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/aviso_rechazos.dart';
 
 class JornadaScreen extends StatefulWidget {
   const JornadaScreen({super.key});
@@ -14,7 +13,6 @@ class JornadaScreen extends StatefulWidget {
 }
 
 class _JornadaScreenState extends State<JornadaScreen> {
-  final ApiService _api = ApiService();
   Map<String, dynamic>? _jornada;
   bool _isLoading = true;
   bool _isProcessing = false;
@@ -35,44 +33,41 @@ class _JornadaScreenState extends State<JornadaScreen> {
 
   Future<void> _cargarJornada() async {
     setState(() => _isLoading = true);
-    try {
-      final result = await _api.get('jornadas');
-      if (result['statusCode'] == 200) {
-        final data = result['data'];
-        final jornadas = data is List ? data : (data['data'] ?? []);
 
-        // Buscar jornada activa (sin hora_fin)
-        Map<String, dynamic>? activa;
-        for (var j in jornadas) {
-          if (j['hora_fin'] == null) {
-            activa = j;
-            break;
-          }
-        }
-        setState(() {
-          _jornada = activa;
-          _isLoading = false;
-        });
-        _iniciarTimer();
+    // Solo la jornada de quien inició sesión; sin conexión, la guardada en
+    // el celular más lo que esté en la cola
+    final jornada = await JornadaService.obtenerActual();
+    if (!mounted) return;
+    await mostrarRechazosSincronizacion(context);
+    if (!mounted) return;
 
-        // El reporte de ubicación en vivo lo maneja un servicio global
-        // (UbicacionService) que no depende de esta pantalla, así que
-        // sigue funcionando aunque la persona navegue a otra sección
-        // de la app. Aquí solo nos aseguramos de que esté encendido o
-        // apagado según si hay una jornada activa.
-        if (_estadoJornada == 'en_curso' || _estadoJornada == 'en_comida') {
-          UbicacionService.instancia.iniciar();
-        } else {
-          UbicacionService.instancia.detener();
-        }
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
+    setState(() {
+      _jornada = jornada;
+      _isLoading = false;
+    });
+    _iniciarTimer();
+
+    // El reporte de ubicación en vivo lo maneja un servicio global
+    // (UbicacionService) que no depende de esta pantalla, así que
+    // sigue funcionando aunque la persona navegue a otra sección
+    // de la app. Aquí solo nos aseguramos de que esté encendido o
+    // apagado según si hay una jornada activa.
+    if (_estadoJornada == 'en_curso' || _estadoJornada == 'en_comida') {
+      UbicacionService.instancia.iniciar();
+    } else {
+      UbicacionService.instancia.detener();
     }
   }
 
   void _iniciarTimer() {
     _timer?.cancel();
+    // Jornada finalizada (pendiente de sincronizar): tiempo total fijo
+    if (_jornada?['hora_inicio'] != null && _jornada?['hora_fin'] != null) {
+      _tiempoAcumulado = DateTime.parse(
+        _jornada!['hora_fin'],
+      ).difference(DateTime.parse(_jornada!['hora_inicio']));
+      return;
+    }
     if (_jornada != null &&
         _jornada!['hora_inicio'] != null &&
         _jornada!['hora_fin'] == null) {
@@ -109,134 +104,48 @@ class _JornadaScreenState extends State<JornadaScreen> {
     return 'en_curso';
   }
 
-  Future<void> _iniciarJornada() async {
+  // Registra un momento de la jornada; sin conexión queda en la cola
+  Future<void> _registrar(String evento, String mensajeOk) async {
     setState(() => _isProcessing = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final usuarioStr = prefs.getString('usuario');
-      int? usuarioId;
-      if (usuarioStr != null) {
-        final userData = jsonDecode(usuarioStr);
-        usuarioId = userData['id'];
-      }
+    final resultado = await JornadaService.registrar(evento);
+    if (!mounted) return;
 
-      // Se intenta capturar la ubicación GPS antes de iniciar la jornada.
-      // Si no se puede obtener (GPS apagado, permiso negado, etc.), la
-      // jornada se inicia de todas formas sin ubicación.
-      final position = await UbicacionService.instancia.obtenerUbicacionActual();
-
-      final body = <String, dynamic>{'usuario_id': usuarioId};
-      if (position != null) {
-        body['latitud_inicio'] = position.latitude;
-        body['longitud_inicio'] = position.longitude;
-      }
-
-      final result = await _api.post('jornadas/iniciar', body: body);
-      if (result['statusCode'] == 201 || result['statusCode'] == 200) {
-        await _cargarJornada();
-      } else {
-        if (mounted) {
-          final msg = result['data']['message'] ?? 'Error al iniciar jornada';
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(msg)));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Error de conexión')));
-      }
-    }
-    setState(() => _isProcessing = false);
-  }
-
-  Future<void> _iniciarComida() async {
-    setState(() => _isProcessing = true);
-    try {
-      final result = await _api.post(
-        'jornadas/${_jornada!['id']}/iniciar-comida',
+    if (resultado == ResultadoJornada.error) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(JornadaService.ultimoError ?? 'No se pudo registrar'),
+          backgroundColor: AppColors.error,
+        ),
       );
-      if (result['statusCode'] == 200) {
-        await _cargarJornada();
-      } else {
-        if (mounted) {
-          final msg = result['data']['message'] ?? 'Error al iniciar comida';
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(msg)));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Error de conexión')));
-      }
+      return;
     }
+
+    await _cargarJornada();
+    if (!mounted) return;
     setState(() => _isProcessing = false);
+    final enCola = resultado == ResultadoJornada.enCola;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          enCola ? 'Sin conexión. Se enviará cuando haya conexión.' : mensajeOk,
+        ),
+        backgroundColor: enCola ? AppColors.warning : AppColors.success,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
-  Future<void> _finalizarComida() async {
-    setState(() => _isProcessing = true);
-    try {
-      final result = await _api.post(
-        'jornadas/${_jornada!['id']}/finalizar-comida',
-      );
-      if (result['statusCode'] == 200) {
-        await _cargarJornada();
-      } else {
-        if (mounted) {
-          final msg = result['data']['message'] ?? 'Error al finalizar comida';
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(msg)));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Error de conexión')));
-      }
-    }
-    setState(() => _isProcessing = false);
-  }
+  Future<void> _iniciarJornada() => _registrar('iniciar', 'Jornada iniciada');
 
-  Future<void> _finalizarJornada() async {
-    setState(() => _isProcessing = true);
-    try {
-      final result = await _api.post('jornadas/${_jornada!['id']}/finalizar');
-      if (result['statusCode'] == 200) {
-        _timer?.cancel();
-        UbicacionService.instancia.detener();
-        await _cargarJornada();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Jornada finalizada'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          final msg = result['data']['message'] ?? 'Error al finalizar jornada';
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(msg)));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Error de conexión')));
-      }
-    }
-    setState(() => _isProcessing = false);
-  }
+  Future<void> _iniciarComida() =>
+      _registrar('iniciar_comida', 'Inicio de comida registrado');
+
+  Future<void> _finalizarComida() =>
+      _registrar('finalizar_comida', 'Fin de comida registrado');
+
+  Future<void> _finalizarJornada() =>
+      _registrar('finalizar', 'Jornada finalizada');
 
   void _confirmarAccion(
     String titulo,
@@ -374,6 +283,33 @@ class _JornadaScreenState extends State<JornadaScreen> {
                       ],
                     ),
                   ),
+                  if (_jornada?['pendiente_sync'] == true ||
+                      JornadaService.sinConexion) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.cloud_upload_outlined,
+                          size: 16,
+                          color: AppColors.textPrimary.withValues(alpha: 0.5),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _jornada?['pendiente_sync'] == true
+                                ? 'Hay registros pendientes de sincronizar'
+                                : 'Sin conexión — se muestra lo guardado en el celular',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textPrimary.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 16),
 
                   // Cronometro

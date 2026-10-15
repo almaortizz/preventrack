@@ -159,6 +159,23 @@ class SyncService {
             'No se pudo registrar $accion del pedido $numero. $motivo '
             'Avisa a la oficina.',
           );
+        } else if (op['tipo'] == 'jornada' && result['statusCode'] == 422) {
+          // La jornada cambió mientras no había conexión (p. ej. la oficina
+          // la cerró): este registro ya no aplica. Se quita y se avisa.
+          await DatabaseService.eliminarOperacionPendiente(op['id'] as int);
+          const momentos = {
+            'iniciar': 'el inicio de la jornada',
+            'iniciar_comida': 'el inicio de la comida',
+            'finalizar_comida': 'el fin de la comida',
+            'finalizar': 'el fin de la jornada',
+          };
+          final motivo =
+              (result['data'] is Map ? result['data']['message'] : null) ??
+              '';
+          _rechazos.add(
+            'No se pudo registrar ${momentos[body?['evento']] ?? 'la jornada'}. '
+            '$motivo Avisa a la oficina.',
+          );
         } else {
           fallidas++;
         }

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Comision;
 use App\Models\Cuota;
-use App\Models\Venta;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -14,7 +13,10 @@ class ComisionController extends Controller
     {
         $query = Comision::with(['usuario', 'cuota']);
 
-        if ($request->filled('usuario_id')) {
+        // Un preventista solo ve sus propias comisiones
+        if ((int) $request->user()->rol_id !== 1) {
+            $query->where('usuario_id', $request->user()->id);
+        } elseif ($request->filled('usuario_id')) {
             $query->where('usuario_id', $request->usuario_id);
         }
 
@@ -30,8 +32,8 @@ class ComisionController extends Controller
         return response()->json($comision->load(['usuario', 'cuota']));
     }
 
-    // Revisa el total vendido (pedidos entregados) dentro de la semana de la cuota,
-    // y si alcanzó el objetivo, genera la comisión automáticamente.
+    // Revisión manual desde el panel. La comisión también se genera sola al
+    // registrar una entrega (VentaController@marcarEntregado).
     public function evaluarCuota(Cuota $cuota)
     {
         if ($cuota->cumplida) {
@@ -40,31 +42,16 @@ class ComisionController extends Controller
             ]);
         }
 
-        $totalVendido = Venta::where('preventista_vendedor_id', $cuota->usuario_id)
-            ->where('estado', 'entregado')
-            ->whereBetween('fecha_hora', [$cuota->fecha_inicio_semana, $cuota->fecha_fin_semana])
-            ->sum('total');
+        $comision = $cuota->evaluar();
 
-        $cuota->update(['monto_alcanzado' => $totalVendido]);
-
-        if ($totalVendido < $cuota->monto_objetivo) {
+        if (!$comision) {
             return response()->json([
                 'message' => 'Aún no se alcanza la cuota.',
-                'monto_alcanzado' => $totalVendido,
+                'monto_alcanzado' => $cuota->monto_alcanzado,
                 'monto_objetivo' => $cuota->monto_objetivo,
                 'cuota' => $cuota,
             ]);
         }
-
-        $cuota->update(['cumplida' => true]);
-
-        $comision = Comision::create([
-            'usuario_id' => $cuota->usuario_id,
-            'cuota_id' => $cuota->id,
-            'monto' => $cuota->monto_comision,
-            'fecha_generada' => now()->toDateString(),
-            'estado' => 'pendiente',
-        ]);
 
         return response()->json([
             'message' => '¡Cuota cumplida! Comisión generada.',

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Comision extends Model
 {
+    protected $table = 'comisiones';
+
     protected $fillable = [
         'usuario_id', 'cuota_id', 'monto', 'fecha_generada', 'estado',
     ];

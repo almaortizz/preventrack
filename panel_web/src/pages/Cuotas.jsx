@@ -3,38 +3,64 @@ import client from '../api/client'
 
 const ROL_COLABORADOR = 2
 
-function lunesDeEstaSemana() {
-  const hoy = new Date()
-  const dia = hoy.getDay() // 0 = domingo
-  const diff = hoy.getDate() - dia + (dia === 0 ? -6 : 1)
-  const lunes = new Date(hoy.setDate(diff))
-  return lunes.toISOString().slice(0, 10)
+// ── Fechas en hora local (México), no en UTC ──
+function aISO(fecha) {
+  const y = fecha.getFullYear()
+  const m = String(fecha.getMonth() + 1).padStart(2, '0')
+  const d = String(fecha.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
-function domingoDeEstaSemana(lunesISO) {
-  const lunes = new Date(lunesISO)
-  const domingo = new Date(lunes)
-  domingo.setDate(lunes.getDate() + 6)
-  return domingo.toISOString().slice(0, 10)
+function desdeISO(iso) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d)
 }
 
-const emptyForm = {
-  usuario_id: '',
-  fecha_inicio_semana: lunesDeEstaSemana(),
-  fecha_fin_semana: domingoDeEstaSemana(lunesDeEstaSemana()),
-  monto_objetivo: '',
-  monto_comision: '',
+// Lunes de la semana de cualquier fecha (el domingo pertenece a la semana anterior)
+function lunesDe(iso) {
+  const fecha = desdeISO(iso)
+  const dia = fecha.getDay() // 0 = domingo
+  fecha.setDate(fecha.getDate() - (dia === 0 ? 6 : dia - 1))
+  return aISO(fecha)
 }
+
+function sumarDias(iso, dias) {
+  const fecha = desdeISO(iso)
+  fecha.setDate(fecha.getDate() + dias)
+  return aISO(fecha)
+}
+
+// "Del lunes 12 al sábado 17 de octubre" (las cuotas son de lunes a sábado)
+function textoSemana(lunesISO) {
+  const lunes = desdeISO(lunesISO)
+  const sabado = desdeISO(sumarDias(lunesISO, 5))
+  const mes = (f) => f.toLocaleDateString('es-MX', { month: 'long' })
+  const inicio =
+    mes(lunes) === mes(sabado) ? `${lunes.getDate()}` : `${lunes.getDate()} de ${mes(lunes)}`
+  return `Del lunes ${inicio} al sábado ${sabado.getDate()} de ${mes(sabado)}`
+}
+
+const formEdicionVacio = { monto_objetivo: '', monto_comision: '' }
 
 export default function Cuotas() {
   const [cuotas, setCuotas] = useState([])
   const [preventistas, setPreventistas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [aviso, setAviso] = useState('')
 
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState(emptyForm)
+  // Nueva cuota (varios preventistas a la vez)
+  const [showNueva, setShowNueva] = useState(false)
+  const [semana, setSemana] = useState(lunesDe(aISO(new Date())))
+  const [generales, setGenerales] = useState({ monto_objetivo: '', monto_comision: '' })
+  const [filas, setFilas] = useState({}) // { usuarioId: { seleccionado, monto_objetivo, monto_comision } }
+  const [conCuota, setConCuota] = useState([]) // ids que ya tienen cuota esa semana
+  const [guardando, setGuardando] = useState(false)
+
+  // Editar montos de una cuota existente
+  const [editando, setEditando] = useState(null)
+  const [formEdicion, setFormEdicion] = useState(formEdicionVacio)
+
   const [formError, setFormError] = useState('')
 
   function cargar() {
@@ -60,51 +86,124 @@ export default function Cuotas() {
     cargarPreventistas()
   }, [])
 
-  function abrirNuevo() {
-    setForm(emptyForm)
-    setEditingId(null)
+  // Al abrir el formulario o cambiar de semana: quién ya tiene cuota esa semana
+  useEffect(() => {
+    if (!showNueva) return
+    client
+      .get('/cuotas', { params: { semana } })
+      .then((res) => setConCuota((res.data.data ?? []).map((c) => c.usuario_id)))
+      .catch(() => setConCuota([]))
+  }, [showNueva, semana])
+
+  function abrirNueva() {
+    const inicial = {}
+    preventistas.forEach((p) => {
+      inicial[p.id] = { seleccionado: true, monto_objetivo: '', monto_comision: '' }
+    })
+    setFilas(inicial)
+    setGenerales({ monto_objetivo: '', monto_comision: '' })
+    setSemana(lunesDe(aISO(new Date())))
     setFormError('')
-    setShowForm(true)
+    setShowNueva(true)
+  }
+
+  // Preventistas a los que sí se les puede crear cuota esa semana
+  const disponibles = preventistas.filter((p) => !conCuota.includes(p.id))
+  const seleccionados = disponibles.filter((p) => filas[p.id]?.seleccionado)
+  const todosMarcados = disponibles.length > 0 && seleccionados.length === disponibles.length
+
+  function cambiarFila(id, cambios) {
+    setFilas((prev) => ({ ...prev, [id]: { ...prev[id], ...cambios } }))
+  }
+
+  function marcarTodos(valor) {
+    setFilas((prev) => {
+      const nuevo = { ...prev }
+      disponibles.forEach((p) => {
+        nuevo[p.id] = { ...nuevo[p.id], seleccionado: valor }
+      })
+      return nuevo
+    })
+  }
+
+  function aplicarATodos() {
+    setFilas((prev) => {
+      const nuevo = { ...prev }
+      disponibles.forEach((p) => {
+        nuevo[p.id] = {
+          ...nuevo[p.id],
+          monto_objetivo: generales.monto_objetivo,
+          monto_comision: generales.monto_comision,
+        }
+      })
+      return nuevo
+    })
+  }
+
+  async function crearCuotas(e) {
+    e.preventDefault()
+    setFormError('')
+
+    if (!seleccionados.length) {
+      setFormError('Selecciona al menos un preventista.')
+      return
+    }
+    const incompleto = seleccionados.find(
+      (p) => filas[p.id].monto_objetivo === '' || filas[p.id].monto_comision === '',
+    )
+    if (incompleto) {
+      setFormError(
+        `Falta el objetivo o la comisión de ${incompleto.nombre} ${incompleto.apellidos}.`,
+      )
+      return
+    }
+
+    setGuardando(true)
+    try {
+      const res = await client.post('/cuotas/lote', {
+        fecha_inicio_semana: semana,
+        cuotas: seleccionados.map((p) => ({
+          usuario_id: p.id,
+          monto_objetivo: Number(filas[p.id].monto_objetivo),
+          monto_comision: Number(filas[p.id].monto_comision),
+        })),
+      })
+      const omitidos = res.data.omitidos ?? []
+      setAviso(
+        res.data.message +
+          (omitidos.length ? ` Ya tenían cuota esa semana: ${omitidos.join(', ')}.` : ''),
+      )
+      setShowNueva(false)
+      cargar()
+    } catch (err) {
+      setFormError(err.response?.data?.message || 'Ocurrió un error al crear las cuotas.')
+    } finally {
+      setGuardando(false)
+    }
   }
 
   function abrirEditar(cuota) {
-    setForm({
-      usuario_id: cuota.usuario_id,
-      fecha_inicio_semana: cuota.fecha_inicio_semana,
-      fecha_fin_semana: cuota.fecha_fin_semana,
+    setFormEdicion({
       monto_objetivo: cuota.monto_objetivo,
       monto_comision: cuota.monto_comision,
     })
-    setEditingId(cuota.id)
+    setEditando(cuota)
     setFormError('')
-    setShowForm(true)
   }
 
-  async function guardar(e) {
+  async function guardarEdicion(e) {
     e.preventDefault()
     setFormError('')
     try {
-      if (editingId) {
-        // Solo el monto se puede editar una vez creada
-        await client.put(`/cuotas/${editingId}`, {
-          monto_objetivo: Number(form.monto_objetivo),
-          monto_comision: Number(form.monto_comision),
-        })
-      } else {
-        await client.post('/cuotas', {
-          usuario_id: Number(form.usuario_id),
-          fecha_inicio_semana: form.fecha_inicio_semana,
-          fecha_fin_semana: form.fecha_fin_semana,
-          monto_objetivo: Number(form.monto_objetivo),
-          monto_comision: Number(form.monto_comision),
-        })
-      }
-      setShowForm(false)
+      // Solo el monto se puede editar una vez creada
+      await client.put(`/cuotas/${editando.id}`, {
+        monto_objetivo: Number(formEdicion.monto_objetivo),
+        monto_comision: Number(formEdicion.monto_comision),
+      })
+      setEditando(null)
       cargar()
     } catch (err) {
-      setFormError(
-        err.response?.data?.message || 'Ocurrió un error al guardar la cuota.',
-      )
+      setFormError(err.response?.data?.message || 'Ocurrió un error al guardar la cuota.')
     }
   }
 
@@ -118,12 +217,15 @@ export default function Cuotas() {
     }
   }
 
+  const inputClase =
+    'w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary'
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-neutral-800">Cuotas de venta</h1>
         <button
-          onClick={abrirNuevo}
+          onClick={abrirNueva}
           className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary/90"
         >
           + Nueva cuota
@@ -131,6 +233,14 @@ export default function Cuotas() {
       </div>
 
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+      {aviso && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
+          <span>{aviso}</span>
+          <button onClick={() => setAviso('')} className="font-semibold hover:underline">
+            Cerrar
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-neutral-100 overflow-x-auto">
         <table className="w-full text-sm">
@@ -202,58 +312,179 @@ export default function Cuotas() {
         </table>
       </div>
 
-      {showForm && (
+      {/* ── Nueva cuota: varios preventistas a la vez ── */}
+      {showNueva && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
+          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-primary mb-4">Nueva cuota</h2>
+            <form onSubmit={crearCuotas} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Semana</label>
+                <input
+                  type="date"
+                  value={semana}
+                  onChange={(e) => e.target.value && setSemana(lunesDe(e.target.value))}
+                  className={inputClase}
+                  required
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  {textoSemana(semana)} (elige cualquier día: se ajusta al lunes)
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-neutral-50 border border-neutral-100 p-3">
+                <p className="text-sm font-medium text-neutral-700 mb-2">Montos para todos</p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="block text-xs text-neutral-500 mb-1">
+                      Objetivo (meta de ventas)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={generales.monto_objetivo}
+                      onChange={(e) =>
+                        setGenerales({ ...generales, monto_objetivo: e.target.value })
+                      }
+                      className={inputClase}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="block text-xs text-neutral-500 mb-1">
+                      Comisión si cumple
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={generales.monto_comision}
+                      onChange={(e) =>
+                        setGenerales({ ...generales, monto_comision: e.target.value })
+                      }
+                      className={inputClase}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={aplicarATodos}
+                    className="px-4 py-2 rounded-lg border border-secondary text-secondary font-medium hover:bg-secondary/10"
+                  >
+                    Aplicar a todos
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-neutral-700 mb-2">
+                  <input
+                    type="checkbox"
+                    checked={todosMarcados}
+                    onChange={(e) => marcarTodos(e.target.checked)}
+                    disabled={!disponibles.length}
+                  />
+                  Seleccionar todos
+                </label>
+
+                <div className="border border-neutral-100 rounded-lg divide-y divide-neutral-100">
+                  {preventistas.length ? (
+                    preventistas.map((p) => {
+                      const yaTiene = conCuota.includes(p.id)
+                      const fila = filas[p.id] ?? {}
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex flex-wrap items-center gap-2 px-3 py-2 ${
+                            yaTiene ? 'bg-neutral-50 text-neutral-400' : ''
+                          }`}
+                        >
+                          <label className="flex items-center gap-2 flex-1 min-w-[180px] text-sm">
+                            <input
+                              type="checkbox"
+                              checked={!yaTiene && !!fila.seleccionado}
+                              onChange={(e) => cambiarFila(p.id, { seleccionado: e.target.checked })}
+                              disabled={yaTiene}
+                            />
+                            {p.nombre} {p.apellidos}
+                          </label>
+                          {yaTiene ? (
+                            <span className="text-xs italic">ya tiene cuota esta semana</span>
+                          ) : (
+                            <>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="Objetivo"
+                                value={fila.monto_objetivo ?? ''}
+                                onChange={(e) =>
+                                  cambiarFila(p.id, { monto_objetivo: e.target.value })
+                                }
+                                disabled={!fila.seleccionado}
+                                className="w-28 rounded-lg border border-neutral-200 px-2 py-1 text-sm disabled:bg-neutral-100"
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="Comisión"
+                                value={fila.monto_comision ?? ''}
+                                onChange={(e) =>
+                                  cambiarFila(p.id, { monto_comision: e.target.value })
+                                }
+                                disabled={!fila.seleccionado}
+                                className="w-28 rounded-lg border border-neutral-200 px-2 py-1 text-sm disabled:bg-neutral-100"
+                              />
+                            </>
+                          )}
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <p className="px-3 py-4 text-sm text-neutral-400 text-center">
+                      No hay preventistas activos.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {formError && <p className="text-red-600 text-sm">{formError}</p>}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNueva(false)}
+                  className="px-4 py-2 rounded-lg text-neutral-600 hover:bg-neutral-100"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardando || !seleccionados.length}
+                  className="bg-primary text-white font-semibold px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {guardando
+                    ? 'Creando...'
+                    : `Crear ${seleccionados.length} cuota${seleccionados.length === 1 ? '' : 's'}`}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Editar montos de una cuota existente ── */}
+      {editando && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
           <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md">
-            <h2 className="text-lg font-bold text-primary mb-4">
-              {editingId ? 'Editar cuota' : 'Nueva cuota'}
-            </h2>
-            <form onSubmit={guardar} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Preventista</label>
-                <select
-                  value={form.usuario_id}
-                  onChange={(e) => setForm({ ...form, usuario_id: e.target.value })}
-                  className="w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary disabled:bg-neutral-100"
-                  required
-                  disabled={!!editingId}
-                >
-                  <option value="">Selecciona un preventista</option>
-                  {preventistas.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre} {p.apellidos}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">Inicio de semana</label>
-                  <input
-                    type="date"
-                    value={form.fecha_inicio_semana}
-                    onChange={(e) =>
-                      setForm({ ...form, fecha_inicio_semana: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary disabled:bg-neutral-100"
-                    required
-                    disabled={!!editingId}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">Fin de semana</label>
-                  <input
-                    type="date"
-                    value={form.fecha_fin_semana}
-                    onChange={(e) => setForm({ ...form, fecha_fin_semana: e.target.value })}
-                    className="w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary disabled:bg-neutral-100"
-                    required
-                    disabled={!!editingId}
-                  />
-                </div>
-              </div>
-
+            <h2 className="text-lg font-bold text-primary mb-1">Editar cuota</h2>
+            <p className="text-sm text-neutral-500 mb-4">
+              {editando.usuario
+                ? `${editando.usuario.nombre} ${editando.usuario.apellidos}`
+                : '—'}{' '}
+              · {editando.fecha_inicio_semana} — {editando.fecha_fin_semana}
+            </p>
+            <form onSubmit={guardarEdicion} className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">
                   Monto objetivo (meta de ventas de la semana)
@@ -262,9 +493,11 @@ export default function Cuotas() {
                   type="number"
                   min="0"
                   step="0.01"
-                  value={form.monto_objetivo}
-                  onChange={(e) => setForm({ ...form, monto_objetivo: e.target.value })}
-                  className="w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary"
+                  value={formEdicion.monto_objetivo}
+                  onChange={(e) =>
+                    setFormEdicion({ ...formEdicion, monto_objetivo: e.target.value })
+                  }
+                  className={inputClase}
                   required
                 />
               </div>
@@ -277,9 +510,11 @@ export default function Cuotas() {
                   type="number"
                   min="0"
                   step="0.01"
-                  value={form.monto_comision}
-                  onChange={(e) => setForm({ ...form, monto_comision: e.target.value })}
-                  className="w-full rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary"
+                  value={formEdicion.monto_comision}
+                  onChange={(e) =>
+                    setFormEdicion({ ...formEdicion, monto_comision: e.target.value })
+                  }
+                  className={inputClase}
                   required
                 />
               </div>
@@ -289,7 +524,7 @@ export default function Cuotas() {
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => setEditando(null)}
                   className="px-4 py-2 rounded-lg text-neutral-600 hover:bg-neutral-100"
                 >
                   Cancelar

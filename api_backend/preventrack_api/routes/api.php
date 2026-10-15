@@ -71,12 +71,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('visitas', VisitaController::class)->only(['index', 'store', 'show', 'destroy']);
 
     Route::get('jornadas', [JornadaController::class, 'index']);
+    Route::get('jornadas/actual', [JornadaController::class, 'actual']);
+    Route::post('jornadas/registrar', [JornadaController::class, 'registrar']);
     Route::get('jornadas/{jornada}', [JornadaController::class, 'show']);
     Route::post('jornadas/iniciar', [JornadaController::class, 'iniciar']);
     Route::post('jornadas/{jornada}/iniciar-comida', [JornadaController::class, 'iniciarComida']);
     Route::post('jornadas/{jornada}/finalizar-comida', [JornadaController::class, 'finalizarComida']);
     Route::post('jornadas/{jornada}/finalizar', [JornadaController::class, 'finalizar']);
 
+    Route::post('cuotas/lote', [CuotaController::class, 'lote']);
     Route::apiResource('cuotas', CuotaController::class);
 
     Route::apiResource('rutas', RutaController::class)->only(['index', 'store', 'show', 'destroy']);
