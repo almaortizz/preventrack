@@ -30,10 +30,9 @@ class _EntregasScreenState extends State<EntregasScreen> {
 
   Future<void> _cargarEntregas() async {
     setState(() => _isLoading = true);
-    final usuarioId = Provider.of<AuthProvider>(
-      context,
-      listen: false,
-    ).usuario?['id'];
+    final usuario = Provider.of<AuthProvider>(context, listen: false).usuario;
+    final usuarioId = usuario?['id'];
+    final esAdmin = usuario?['rol_id'] == 1;
 
     // Subir primero lo que se registró sin conexión
     if (DatabaseService.isAvailable &&
@@ -42,8 +41,9 @@ class _EntregasScreenState extends State<EntregasScreen> {
       if (mounted) await mostrarRechazosSincronizacion(context);
     }
 
-    // Solo los pedidos que este usuario tiene asignados para entregar
-    final filtro = usuarioId != null
+    // El preventista ve solo lo que tiene asignado para entregar;
+    // el administrador ve todas las entregas en ruta
+    final filtro = !esAdmin && usuarioId != null
         ? '&preventista_entrega_id=$usuarioId'
         : '';
     var entregas = <dynamic>[];

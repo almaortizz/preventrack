@@ -6,11 +6,17 @@ use App\Models\Jornada;
 use App\Models\Ruta;
 use App\Models\Usuario;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class MonitoreoController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        // La ubicación del equipo solo la puede ver el administrador
+        if ((int) $request->user()->rol_id !== 1) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
         $hoy = Carbon::now('America/Mexico_City')->toDateString();
 
         $preventistas = Usuario::where('rol_id', 2)

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
-import '../services/api_service.dart';
+import '../services/jornada_service.dart';
 import '../services/ubicacion_service.dart';
+import '../widgets/barra_navegacion_flotante.dart';
 import 'dashboard_screen.dart';
 import 'dashboard_admin_screen.dart';
 import 'clientes_screen.dart';
@@ -33,17 +34,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // sin que tenga que volver a entrar a la pantalla de Jornada Laboral.
   Future<void> _reanudarUbicacionSiHayJornadaActiva() async {
     try {
-      final result = await ApiService().get('jornadas');
-      if (result['statusCode'] != 200) return;
-
-      final data = result['data'];
-      final jornadas = data is List ? data : (data['data'] ?? []);
-
-      final hayActiva = jornadas.any(
-        (j) => j['hora_inicio'] != null && j['hora_fin'] == null,
-      );
-
-      if (hayActiva) {
+      // Solo la jornada de quien inició sesión (incluye la iniciada sin
+      // conexión)
+      if (await JornadaService.tieneJornadaActiva()) {
         UbicacionService.instancia.iniciar();
       }
     } catch (_) {
@@ -59,7 +52,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Widget> _getScreens(bool admin) {
     if (admin) {
       return [
-        DashboardAdminScreen(),
+        DashboardAdminScreen(
+          onVerPedidos: () => setState(() => _selectedIndex = 2),
+        ),
         ClientesScreen(),
         PedidosScreen(),
         EntregasScreen(),
@@ -294,34 +289,25 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       body: screens[_selectedIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() => _selectedIndex = index);
-        },
-        backgroundColor: AppColors.white,
-        surfaceTintColor: AppColors.white,
-        indicatorColor: AppColors.primary.withValues(alpha: 0.1),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard, color: AppColors.primary),
-            label: 'Dashboard',
+      bottomNavigationBar: BarraNavegacionFlotante(
+        indice: _selectedIndex,
+        onCambio: (index) => setState(() => _selectedIndex = index),
+        secciones: const [
+          SeccionNavegacion(
+            Icons.dashboard_outlined,
+            Icons.dashboard,
+            'Inicio',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people, color: AppColors.primary),
-            label: 'Clientes',
+          SeccionNavegacion(Icons.people_outline, Icons.people, 'Clientes'),
+          SeccionNavegacion(
+            Icons.shopping_cart_outlined,
+            Icons.shopping_cart,
+            'Pedidos',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.shopping_cart_outlined),
-            selectedIcon: Icon(Icons.shopping_cart, color: AppColors.primary),
-            label: 'Pedidos',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.local_shipping_outlined),
-            selectedIcon: Icon(Icons.local_shipping, color: AppColors.primary),
-            label: 'Entregas',
+          SeccionNavegacion(
+            Icons.local_shipping_outlined,
+            Icons.local_shipping,
+            'Entregas',
           ),
         ],
       ),

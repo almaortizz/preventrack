@@ -20,6 +20,15 @@ class VentaController extends Controller
     {
         $query = Venta::with(['domicilio.cliente', 'vendedor', 'repartidor', 'detalle.producto']);
 
+        // Un preventista solo ve los pedidos que levantó o que le toca entregar
+        if ((int) $request->user()->rol_id !== 1) {
+            $userId = $request->user()->id;
+            $query->where(function ($q) use ($userId) {
+                $q->where('preventista_vendedor_id', $userId)
+                    ->orWhere('preventista_entrega_id', $userId);
+            });
+        }
+
         if ($request->filled('estado')) {
             $query->where('estado', $request->estado);
         }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import 'catalogo_productos_screen.dart';
+import 'pedidos_screen.dart';
 
 class DetalleClienteScreen extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -25,29 +26,54 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
 
   Future<void> _cargarPedidos() async {
     try {
-      final result = await _api.get('ventas');
+      // Los 5 más recientes de este cliente (la API filtra por cliente)
+      final result = await _api.get(
+        'ventas?cliente_id=${widget.cliente['id']}&per_page=5',
+      );
       if (result['statusCode'] == 200) {
         final data = result['data'];
-        final todas = data is List ? data : (data['data'] ?? []);
+        final pedidosCliente = data is List ? data : (data['data'] ?? []);
 
-        // Filtrar solo los pedidos de este cliente
-        final clienteId = widget.cliente['id'];
-        final pedidosCliente = todas.where((venta) {
-          final domicilio = venta['domicilio'];
-          if (domicilio == null) return false;
-          final cliente = domicilio['cliente'];
-          if (cliente == null) return false;
-          return cliente['id'] == clienteId;
-        }).toList();
-
+        if (!mounted) return;
         setState(() {
-          _pedidos = pedidosCliente.take(5).toList();
+          _pedidos = pedidosCliente;
           _isLoadingPedidos = false;
         });
+        return;
       }
     } catch (e) {
-      setState(() => _isLoadingPedidos = false);
+      // Sin conexión
     }
+    if (mounted) setState(() => _isLoadingPedidos = false);
+  }
+
+  // Historial completo de pedidos del cliente
+  void _verTodosLosPedidos() {
+    final nombre = widget.cliente['nombre_negocio'] ?? 'Cliente';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppBar(
+            title: Text(
+              'Pedidos de $nombre',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+                fontSize: 18,
+              ),
+            ),
+            backgroundColor: AppColors.white,
+            foregroundColor: AppColors.primary,
+            elevation: 0,
+            surfaceTintColor: AppColors.white,
+            centerTitle: true,
+          ),
+          body: PedidosScreen(clienteId: widget.cliente['id']),
+        ),
+      ),
+    );
   }
 
   @override
@@ -389,7 +415,7 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () {},
+                        onTap: _verTodosLosPedidos,
                         child: const Text(
                           'Ver todo',
                           style: TextStyle(

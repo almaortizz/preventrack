@@ -4,9 +4,13 @@ import 'package:intl/intl.dart';
 import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import 'detalle_pedido_screen.dart';
 
 class DashboardAdminScreen extends StatefulWidget {
-  const DashboardAdminScreen({super.key});
+  // Lleva a la pestaña Pedidos ("Ver todos" de últimos pedidos)
+  final VoidCallback? onVerPedidos;
+
+  const DashboardAdminScreen({super.key, this.onVerPedidos});
 
   @override
   State<DashboardAdminScreen> createState() => _DashboardAdminScreenState();
@@ -163,7 +167,8 @@ class _DashboardAdminScreenState extends State<DashboardAdminScreen> {
                     iconoColor: AppColors.success,
                     titulo: 'Equipo activo',
                     valor: '${equipo['preventistas_activos'] ?? 0}',
-                    detalle: 'de ${equipo['total_preventistas'] ?? 0} preventistas',
+                    detalle:
+                        'de ${equipo['total_preventistas'] ?? 0} preventistas',
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -247,11 +252,6 @@ class _DashboardAdminScreenState extends State<DashboardAdminScreen> {
                 ),
               ],
             ),
-          ),
-          Icon(
-            Icons.chevron_right,
-            color: AppColors.error.withValues(alpha: 0.4),
-            size: 20,
           ),
         ],
       ),
@@ -368,7 +368,9 @@ class _DashboardAdminScreenState extends State<DashboardAdminScreen> {
                   if (noCumplen > 0)
                     Expanded(
                       flex: noCumplen,
-                      child: Container(color: AppColors.error.withValues(alpha: 0.3)),
+                      child: Container(
+                        color: AppColors.error.withValues(alpha: 0.3),
+                      ),
                     ),
                   if (total == 0)
                     Expanded(child: Container(color: AppColors.cardBorder)),
@@ -379,15 +381,9 @@ class _DashboardAdminScreenState extends State<DashboardAdminScreen> {
           const SizedBox(height: 10),
           Row(
             children: [
-              _buildLeyendaCuota(
-                '$cumplen cumplen',
-                AppColors.success,
-              ),
+              _buildLeyendaCuota('$cumplen cumplen', AppColors.success),
               const SizedBox(width: 20),
-              _buildLeyendaCuota(
-                '$noCumplen pendientes',
-                AppColors.error,
-              ),
+              _buildLeyendaCuota('$noCumplen pendientes', AppColors.error),
               const Spacer(),
               Text(
                 '$porcentajeCumple%',
@@ -410,10 +406,7 @@ class _DashboardAdminScreenState extends State<DashboardAdminScreen> {
         Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
         Text(
@@ -575,7 +568,7 @@ class _DashboardAdminScreenState extends State<DashboardAdminScreen> {
               ),
             ),
             GestureDetector(
-              onTap: () {},
+              onTap: widget.onVerPedidos,
               child: const Text(
                 'Ver todos',
                 style: TextStyle(
@@ -657,107 +650,123 @@ class _DashboardAdminScreenState extends State<DashboardAdminScreen> {
         estadoLabel = estado.toUpperCase();
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.cardBorder),
+    // Abre el detalle; DetallePedidoScreen carga el pedido completo por id
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DetallePedidoScreen(
+            pedido: {
+              'id': pedido['id'],
+              'numero_orden': folio,
+              'estado': estado,
+              'total': total,
+            },
+          ),
+        ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      folio,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: estadoColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        estadoLabel,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: estadoColor,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        folio,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  cliente,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textPrimary.withValues(alpha: 0.6),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: estadoColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          estadoLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: estadoColor,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.person_outline,
-                      size: 12,
-                      color: AppColors.textPrimary.withValues(alpha: 0.35),
+                  const SizedBox(height: 4),
+                  Text(
+                    cliente,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textPrimary.withValues(alpha: 0.6),
                     ),
-                    const SizedBox(width: 3),
-                    Flexible(
-                      child: Text(
-                        preventista,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textPrimary.withValues(alpha: 0.4),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      fecha,
-                      style: TextStyle(
-                        fontSize: 11,
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.person_outline,
+                        size: 12,
                         color: AppColors.textPrimary.withValues(alpha: 0.35),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 3),
+                      Flexible(
+                        child: Text(
+                          preventista,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textPrimary.withValues(alpha: 0.4),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        fecha,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textPrimary.withValues(alpha: 0.35),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '\$${_formatMonto(total)}',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+            const SizedBox(width: 8),
+            Text(
+              '\$${_formatMonto(total)}',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
-          Icon(
-            Icons.chevron_right,
-            color: AppColors.textPrimary.withValues(alpha: 0.25),
-            size: 20,
-          ),
-        ],
+            const SizedBox(width: 4),
+            Icon(
+              Icons.chevron_right,
+              color: AppColors.textPrimary.withValues(alpha: 0.25),
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
   }

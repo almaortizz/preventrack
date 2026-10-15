@@ -53,7 +53,7 @@ class DashboardController extends Controller
             ->sum('total');
 
         // --- Últimos 10 pedidos ---
-        $ultimosPedidos = $misVentas()->with(['domicilio', 'vendedor'])
+        $ultimosPedidos = $misVentas()->with(['domicilio.cliente', 'vendedor'])
             ->orderBy('created_at', 'desc')
             ->take(10)
             ->get();

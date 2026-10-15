@@ -7,7 +7,11 @@ import 'catalogo_productos_screen.dart';
 import '../services/database_service.dart';
 
 class PedidosScreen extends StatefulWidget {
-  const PedidosScreen({super.key});
+  // Si viene, muestra solo los pedidos de ese cliente (historial completo
+  // desde el detalle del cliente), sin el botón de nuevo pedido
+  final int? clienteId;
+
+  const PedidosScreen({super.key, this.clienteId});
 
   @override
   State<PedidosScreen> createState() => _PedidosScreenState();
@@ -37,7 +41,11 @@ class _PedidosScreenState extends State<PedidosScreen> {
   Future<void> _cargarPedidos() async {
     setState(() => _isLoading = true);
     try {
-      final result = await _api.get('ventas');
+      final result = await _api.get(
+        widget.clienteId != null
+            ? 'ventas?cliente_id=${widget.clienteId}&per_page=100'
+            : 'ventas',
+      );
       if (result['statusCode'] == 200) {
         final data = result['data'];
         setState(() {
@@ -238,18 +246,19 @@ class _PedidosScreenState extends State<PedidosScreen> {
           ],
         ),
 
-        // FAB
-        Positioned(
-          bottom: 16,
-          right: 16,
-          child: FloatingActionButton(
-            onPressed: () {
-              _mostrarSelectorCliente();
-            },
-            backgroundColor: AppColors.primary,
-            child: const Icon(Icons.add, color: AppColors.white),
+        // FAB (no en el historial de un cliente)
+        if (widget.clienteId == null)
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: FloatingActionButton(
+              onPressed: () {
+                _mostrarSelectorCliente();
+              },
+              backgroundColor: AppColors.primary,
+              child: const Icon(Icons.add, color: AppColors.white),
+            ),
           ),
-        ),
       ],
     );
   }
