@@ -34,12 +34,14 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkSession() async {
-    await Future.delayed(const Duration(seconds: 3));
-
-    if (!mounted) return;
-
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    await auth.checkSession();
+
+    // Solo lo que tarde revisar la sesión, con un mínimo de 1 s para que
+    // se alcance a ver la animación del logo
+    await Future.wait([
+      auth.checkSession(),
+      Future.delayed(const Duration(seconds: 1)),
+    ]);
 
     if (!mounted) return;
 

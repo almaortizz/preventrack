@@ -33,9 +33,24 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/images/logo.png
+
+# Ícono de la app (logo de Bella Luz sobre fondo blanco).
+# Para regenerarlo después de cambiar el logo: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/images/logo.png"
+  android: true
+  ios: true
+  # Android moderno: ícono adaptable (el celular lo recorta en círculo/cuadro)
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/logo.png"
+  adaptive_icon_foreground_inset: 16
+  # iOS no permite transparencia: se rellena con blanco
+  remove_alpha_ios: true
+  background_color_ios: "#FFFFFF"

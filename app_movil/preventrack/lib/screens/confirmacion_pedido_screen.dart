@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../config/app_theme.dart';
 import '../services/print_service.dart';
+import '../services/whatsapp_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'catalogo_productos_screen.dart';
@@ -235,6 +236,36 @@ class ConfirmacionPedidoScreen extends StatelessWidget {
                           },
                           icon: const Icon(Icons.print_outlined, size: 20),
                           label: const Text('Imprimir Ticket'),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Boton Enviar por WhatsApp (mensaje con el ticket)
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            final auth = Provider.of<AuthProvider>(
+                              context,
+                              listen: false,
+                            );
+                            WhatsappService.enviarTicket(
+                              context,
+                              venta: venta,
+                              cliente: cliente,
+                              preventistaNombre: auth.usuario?['nombre'],
+                            );
+                          },
+                          icon: const Icon(Icons.chat_outlined, size: 18),
+                          label: const Text('Enviar por WhatsApp'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.success,
+                            side: const BorderSide(color: AppColors.success),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 10),

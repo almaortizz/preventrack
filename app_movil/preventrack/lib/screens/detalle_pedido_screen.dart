@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/print_service.dart';
+import '../services/whatsapp_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 
@@ -119,6 +120,19 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          // Mandar el ticket al cliente por WhatsApp (cuando ya cargó el detalle)
+          if (_pedidoDetalle != null)
+            IconButton(
+              icon: const Icon(Icons.chat_outlined, color: AppColors.success),
+              tooltip: 'Enviar por WhatsApp',
+              onPressed: () => WhatsappService.enviarTicket(
+                context,
+                venta: pedido,
+                preventistaNombre: pedido['vendedor']?['nombre'],
+              ),
+            ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(
