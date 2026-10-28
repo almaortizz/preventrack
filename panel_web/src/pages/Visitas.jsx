@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
 import client from '../api/client'
+import Distancia from '../components/Distancia'
 
 const ROL_COLABORADOR = 2
 
 const RESULTADO_STYLES = {
   venta: 'bg-green-100 text-green-700',
   sin_venta: 'bg-yellow-100 text-yellow-700',
+  no_disponible: 'bg-orange-100 text-orange-700',
 }
 
 const RESULTADO_LABEL = {
   venta: 'Con venta',
   sin_venta: 'Sin venta',
+  no_disponible: 'No disponible',
 }
 
 export default function Visitas() {
@@ -134,6 +137,7 @@ export default function Visitas() {
               <th className="px-4 py-3">Cliente</th>
               <th className="px-4 py-3">Dirección</th>
               <th className="px-4 py-3">Resultado</th>
+              <th className="px-4 py-3">Distancia al domicilio</th>
               <th className="px-4 py-3">Fecha</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -141,7 +145,7 @@ export default function Visitas() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-neutral-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-neutral-400">
                   Cargando...
                 </td>
               </tr>
@@ -165,6 +169,9 @@ export default function Visitas() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
+                    <Distancia metros={v.distancia_m} precision={v.precision_m} />
+                  </td>
+                  <td className="px-4 py-3">
                     {new Date(v.fecha_hora).toLocaleString('es-MX')}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -179,7 +186,7 @@ export default function Visitas() {
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-neutral-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-neutral-400">
                   No hay visitas registradas.
                 </td>
               </tr>

@@ -23,7 +23,7 @@ class JornadaController extends Controller
             $query->whereDate('fecha', $request->fecha);
         }
 
-        return response()->json($query->orderByDesc('fecha')->paginate(20));
+        return response()->json($query->orderByDesc('fecha')->paginate($this->porPagina($request)));
     }
 
     // Jornada abierta del usuario que inició sesión (null si no tiene)
@@ -212,8 +212,14 @@ class JornadaController extends Controller
         return response()->json($jornada);
     }
 
-    public function show(Jornada $jornada)
+    public function show(Request $request, Jornada $jornada)
     {
+        // Un preventista solo ve sus propias jornadas
+        if ((int) $request->user()->rol_id !== 1
+            && (int) $jornada->usuario_id !== (int) $request->user()->id) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
         return response()->json($jornada->load('usuario'));
     }
 }

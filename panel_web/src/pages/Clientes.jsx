@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import client from '../api/client'
+import client, { obtenerTodos } from '../api/client'
 import UbicacionPicker from '../components/UbicacionPicker'
 
 const emptyUbicacion = {
@@ -45,6 +45,7 @@ const ESTADO_LABEL = {
 
 export default function Clientes() {
   const [clientes, setClientes] = useState([])
+  const [filtroEstado, setFiltroEstado] = useState('todos') // todos | activo | inactivo
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -71,9 +72,8 @@ export default function Clientes() {
 
   function cargar() {
     setLoading(true)
-    client
-      .get('/clientes')
-      .then((res) => setClientes(res.data.data ?? []))
+    obtenerTodos('/clientes')
+      .then(setClientes)
       .catch(() => setError('No se pudo cargar la lista de clientes.'))
       .finally(() => setLoading(false))
   }
@@ -133,15 +133,26 @@ export default function Clientes() {
     }
   }
 
-  async function eliminar(cliente) {
-    if (!confirm(`¿Eliminar al cliente "${cliente.nombre_negocio}"?`)) return
+  // Los clientes no se borran (tienen historial): se desactivan. Un cliente
+  // inactivo sigue visible con su historial, pero ya no recibe pedidos nuevos.
+  async function cambiarEstado(cliente) {
+    const desactivar = cliente.estado === 'activo'
+    const mensaje = desactivar
+      ? `¿Desactivar al cliente "${cliente.nombre_negocio}"? Seguirá visible con su historial, pero ya no se le podrán levantar pedidos ni agregarlo a rutas.`
+      : `¿Activar de nuevo al cliente "${cliente.nombre_negocio}"?`
+    if (!confirm(mensaje)) return
     try {
-      await client.delete(`/clientes/${cliente.id}`)
+      await client.put(`/clientes/${cliente.id}`, {
+        estado: desactivar ? 'inactivo' : 'activo',
+      })
       cargar()
     } catch {
-      alert('No se pudo eliminar el cliente.')
+      alert('No se pudo cambiar el estado del cliente.')
     }
   }
+
+  const clientesFiltrados =
+    filtroEstado === 'todos' ? clientes : clientes.filter((c) => c.estado === filtroEstado)
 
   // --- Direcciones ---
 
@@ -233,6 +244,16 @@ export default function Clientes() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-neutral-800">Clientes</h1>
         <div className="flex items-center gap-3">
+          <select
+            value={filtroEstado}
+            onChange={(e) => setFiltroEstado(e.target.value)}
+            className="border border-neutral-200 text-neutral-600 text-sm px-3 py-2 rounded-lg"
+            aria-label="Filtrar por estado"
+          >
+            <option value="todos">Todos</option>
+            <option value="activo">Activos</option>
+            <option value="inactivo">Inactivos</option>
+          </select>
           <button
             onClick={() => setMostrarDireccion(!mostrarDireccion)}
             className="border border-neutral-200 text-neutral-600 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-neutral-50"
@@ -271,8 +292,8 @@ export default function Clientes() {
                   Cargando...
                 </td>
               </tr>
-            ) : clientes.length ? (
-              clientes.map((c) => (
+            ) : clientesFiltrados.length ? (
+              clientesFiltrados.map((c) => (
                 <>
                   <tr key={c.id} className="border-b border-neutral-50 last:border-0">
                     <td className="px-4 py-3">{c.folio}</td>
@@ -321,10 +342,12 @@ export default function Clientes() {
                         Editar
                       </button>
                       <button
-                        onClick={() => eliminar(c)}
-                        className="text-red-600 font-medium hover:underline"
+                        onClick={() => cambiarEstado(c)}
+                        className={`font-medium hover:underline ${
+                          c.estado === 'activo' ? 'text-red-600' : 'text-green-600'
+                        }`}
                       >
-                        Eliminar
+                        {c.estado === 'activo' ? 'Desactivar' : 'Activar'}
                       </button>
                     </td>
                   </tr>

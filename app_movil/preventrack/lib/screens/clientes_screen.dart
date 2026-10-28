@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
+import '../widgets/aviso_jornada.dart';
 import '../services/api_service.dart';
 import 'detalle_cliente_screen.dart';
 import 'crear_cliente_screen.dart';
@@ -37,7 +38,8 @@ class _ClientesScreenState extends State<ClientesScreen> {
   Future<void> _cargarClientes() async {
     setState(() => _isLoading = true);
     try {
-      final result = await _api.get('clientes');
+      // Todas las páginas (la API las entrega de 100 en 100)
+      final result = await _api.obtenerTodos('clientes');
       if (result['statusCode'] == 200) {
         final data = result['data'];
         final clientes = data is List ? data : (data['data'] ?? []);
@@ -298,6 +300,9 @@ class _ClientesScreenState extends State<ClientesScreen> {
           right: 16,
           child: FloatingActionButton(
             onPressed: () async {
+              // Registrar clientes requiere la jornada iniciada
+              if (!await requiereJornadaActiva(context)) return;
+              if (!context.mounted) return;
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const CrearClienteScreen()),

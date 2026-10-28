@@ -487,32 +487,52 @@ class _DetalleClienteScreenState extends State<DetalleClienteScreen> {
                 ),
               ),
             ),
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  CatalogoProductosScreen.abrir(
-                    context,
-                    cliente: widget.cliente,
-                    origen: OrigenPedido.cliente,
-                  );
-                },
-                icon: const Icon(Icons.shopping_cart_outlined, size: 20),
-                label: const Text('Nuevo Pedido'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            child: widget.cliente['estado'] == 'inactivo'
+                ? Row(
+                    children: [
+                      const Icon(
+                        Icons.block,
+                        size: 20,
+                        color: AppColors.warning,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Cliente inactivo: no se pueden levantar pedidos.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textPrimary.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        CatalogoProductosScreen.abrir(
+                          context,
+                          cliente: widget.cliente,
+                          origen: OrigenPedido.cliente,
+                        );
+                      },
+                      icon: const Icon(Icons.shopping_cart_outlined, size: 20),
+                      label: const Text('Nuevo Pedido'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ),
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
           ),
         ],
       ),

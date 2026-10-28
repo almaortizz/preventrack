@@ -7,6 +7,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../config/app_theme.dart';
+import '../widgets/aviso_jornada.dart';
 import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/jornada_service.dart';
@@ -443,7 +444,12 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
     );
   }
 
-  void _marcarNoDisponible(int paradaId, BuildContext sheetContext) {
+  Future<void> _marcarNoDisponible(
+    int paradaId,
+    BuildContext sheetContext,
+  ) async {
+    if (!await requiereJornadaActiva(context)) return;
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -804,8 +810,9 @@ class _MapaRutaScreenState extends State<MapaRutaScreen> {
                 width: double.infinity,
                 height: 46,
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(sheetContext);
+                  onPressed: () async {
+                    if (!await requiereJornadaActiva(context)) return;
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
                     _registrarVisita(paradaId, 'sin_venta');
                   },
                   icon: const Icon(Icons.check_circle_outline, size: 20),

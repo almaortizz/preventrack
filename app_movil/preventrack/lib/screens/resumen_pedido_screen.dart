@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import 'confirmacion_pedido_screen.dart';
 import '../services/database_service.dart';
+import '../services/folio_service.dart';
 import '../services/ubicacion_service.dart';
 import 'catalogo_productos_screen.dart';
 
@@ -123,25 +124,36 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
       };
     }).toList();
 
+    // Folio del celular (serie del preventista + año + consecutivo): el
+    // ticket y el WhatsApp llevan el mismo número que verá la oficina, aunque
+    // el pedido se haga sin conexión
+    final folio = await FolioService.siguiente(usuarioId as int);
+    final fechaFin = DateTime.now();
+
     final body = {
+      'numero_orden': folio,
       'domicilio_id': domicilioId,
       'preventista_vendedor_id': usuarioId,
       'productos': productos,
       'notas': _notasController.text.isNotEmpty ? _notasController.text : null,
       'fecha_inicio_creacion': widget.horaInicio.toIso8601String(),
-      'fecha_fin_creacion': DateTime.now().toIso8601String(),
+      'fecha_fin_creacion': fechaFin.toIso8601String(),
       'descuento': _descuento,
       'latitud_registro': posicion?.latitude,
       'longitud_registro': posicion?.longitude,
       'precision': posicion?.accuracy,
       'detalle_ruta_id': widget.detalleRutaId,
+      // Solo los usa la app (avisos si la API rechaza el pedido)
+      'cliente_nombre_local': widget.cliente['nombre_negocio'],
+      'total_local': _total,
     };
 
     try {
       final result = await _api.post('ventas', body: body);
       if (!mounted) return;
 
-      if (result['statusCode'] == 201) {
+      // 200: la API reconoció un reintento del mismo pedido (mismo folio)
+      if (result['statusCode'] == 201 || result['statusCode'] == 200) {
         final venta = result['data'];
         Navigator.pushReplacement(
           context,
@@ -169,16 +181,19 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
         );
 
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Pedido guardado offline. Se enviará cuando haya conexión.',
+        // Confirmación con el pedido armado en el celular: se puede imprimir
+        // y enviar por WhatsApp en el momento, con su folio
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ConfirmacionPedidoScreen(
+              venta: _ventaLocal(folio, domicilioId!, fechaFin),
+              cliente: widget.cliente,
+              origen: widget.origen,
+              pendienteSync: true,
             ),
-            backgroundColor: AppColors.warning,
-            duration: Duration(seconds: 3),
           ),
         );
-        CatalogoProductosScreen.volverAlOrigen(context);
         return;
       }
 
@@ -189,6 +204,35 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
     }
 
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  // Pedido con la misma estructura que regresa la API (la usan el ticket
+  // impreso, el WhatsApp y la confirmación). Sin id: aún no se sincroniza.
+  Map<String, dynamic> _ventaLocal(
+    String folio,
+    int domicilioId,
+    DateTime fecha,
+  ) {
+    return {
+      'id': null,
+      'numero_orden': folio,
+      'estado': 'pendiente',
+      'total': _total.toStringAsFixed(2),
+      'descuento': _descuento.toStringAsFixed(2),
+      'created_at': fecha.toUtc().toIso8601String(),
+      'domicilio': {'id': domicilioId, 'cliente': widget.cliente},
+      'detalle': _carrito.values.map((item) {
+        final precio =
+            double.tryParse(item['producto']['precio_venta'].toString()) ?? 0;
+        final cantidad = item['cantidad'] as int;
+        return {
+          'cantidad': cantidad,
+          'precio_unitario': precio.toStringAsFixed(2),
+          'subtotal': (precio * cantidad).toStringAsFixed(2),
+          'producto': item['producto'],
+        };
+      }).toList(),
+    };
   }
 
   @override

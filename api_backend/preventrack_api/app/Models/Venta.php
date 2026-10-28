@@ -30,6 +30,12 @@ class Venta extends Model
         return $this->belongsTo(Domicilio::class, 'domicilio_id');
     }
 
+    // Ubicación al entregar / reportar no entregado (con distancia al domicilio)
+    public function registrosGps()
+    {
+        return $this->hasMany(RegistroGps::class, 'venta_id')->orderBy('created_at');
+    }
+
     public function vendedor()
     {
         return $this->belongsTo(Usuario::class, 'preventista_vendedor_id');
@@ -43,16 +49,6 @@ class Venta extends Model
     public function detalle()
     {
         return $this->hasMany(DetalleVenta::class, 'venta_id');
-    }
-
-    public function devoluciones()
-    {
-        return $this->hasMany(Devolucion::class, 'venta_id');
-    }
-
-    public function cotizacionOrigen()
-    {
-        return $this->hasOne(Cotizacion::class, 'venta_id');
     }
 
     public function visita()

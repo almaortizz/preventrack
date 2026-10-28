@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
-import '../services/auth_service.dart';
-import 'package:http/http.dart' as http;
-import '../config/api_config.dart';
+import '../services/api_service.dart';
 
 class LegalScreen extends StatefulWidget {
   const LegalScreen({super.key});
@@ -36,18 +34,10 @@ class _LegalScreenState extends State<LegalScreen>
     setState(() => _isLoading = true);
 
     try {
-      final authService = AuthService();
-      final token = await authService.getToken();
+      // Por ApiService: si la sesión ya no es válida (401), manda al login
+      final result = await ApiService().post('usuarios/aceptar-terminos');
 
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/usuarios/aceptar-terminos'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200 && mounted) {
+      if (result['statusCode'] == 200 && mounted) {
         final auth = Provider.of<AuthProvider>(context, listen: false);
         await auth.aceptarTerminosLocal();
         Navigator.pushReplacementNamed(context, '/home');

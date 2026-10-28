@@ -37,16 +37,6 @@ class Usuario extends Authenticatable
         return $this->hasMany(Venta::class, 'preventista_entrega_id');
     }
 
-    public function cotizaciones()
-    {
-        return $this->hasMany(Cotizacion::class, 'usuario_id');
-    }
-
-    public function ubicaciones()
-    {
-        return $this->hasMany(Ubicacion::class, 'usuario_id');
-    }
-
     public function visitas()
     {
         return $this->hasMany(Visita::class, 'usuario_id');

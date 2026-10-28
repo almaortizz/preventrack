@@ -48,6 +48,13 @@ class AuthService {
       } catch (_) {}
     }
 
+    await borrarSesionLocal();
+  }
+
+  // Borra solo la sesión del celular (token y usuario). No toca la cola de
+  // operaciones pendientes ni los datos guardados para trabajar sin conexión.
+  Future<void> borrarSesionLocal() async {
+    final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
     await prefs.remove('usuario');
   }

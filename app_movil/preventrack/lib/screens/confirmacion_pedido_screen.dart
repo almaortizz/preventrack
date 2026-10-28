@@ -11,12 +11,16 @@ class ConfirmacionPedidoScreen extends StatelessWidget {
   final Map<String, dynamic> venta;
   final Map<String, dynamic> cliente;
   final OrigenPedido origen;
+  // Pedido guardado sin conexión (en la cola): se muestra con los datos del
+  // celular; el ticket y el WhatsApp ya llevan su folio
+  final bool pendienteSync;
 
   const ConfirmacionPedidoScreen({
     super.key,
     required this.venta,
     required this.cliente,
     required this.origen,
+    this.pendienteSync = false,
   });
 
   @override
@@ -82,7 +86,9 @@ class ConfirmacionPedidoScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Tu solicitud ha sido procesada\nexitosamente en el sistema Preventrack.',
+                        pendienteSync
+                            ? 'Se guardó en el celular y se enviará\nautomáticamente cuando haya conexión.'
+                            : 'Tu solicitud ha sido procesada\nexitosamente en el sistema Preventrack.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
@@ -90,6 +96,37 @@ class ConfirmacionPedidoScreen extends StatelessWidget {
                           height: 1.4,
                         ),
                       ),
+                      if (pendienteSync) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.cloud_upload_outlined,
+                                size: 16,
+                                color: AppColors.textPrimary,
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'Pendiente de sincronizar',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 28),
 
                       // Card NÚMERO DE ORDEN

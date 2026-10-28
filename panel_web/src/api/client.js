@@ -29,4 +29,20 @@ client.interceptors.response.use(
   },
 )
 
+// Trae todas las páginas de una lista paginada de la API (de 100 en 100)
+export async function obtenerTodos(url, params = {}) {
+  let pagina = 1
+  let todos = []
+  for (;;) {
+    const res = await client.get(url, {
+      params: { ...params, per_page: 100, page: pagina },
+    })
+    const data = res.data
+    if (Array.isArray(data)) return data
+    todos = todos.concat(data.data ?? [])
+    if (!data.last_page || pagina >= data.last_page) return todos
+    pagina++
+  }
+}
+
 export default client

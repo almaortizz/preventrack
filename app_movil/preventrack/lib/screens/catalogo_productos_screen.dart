@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../config/api_config.dart';
 import '../config/app_theme.dart';
+import '../widgets/aviso_jornada.dart';
 import '../services/api_service.dart';
 import 'resumen_pedido_screen.dart';
 import '../services/database_service.dart';
@@ -39,13 +40,30 @@ class CatalogoProductosScreen extends StatefulWidget {
 
   // Abre el catálogo con nombre de ruta para poder regresar al origen
   // desde la confirmación. Devuelve true si se registró un pedido.
+  // El preventista necesita la jornada iniciada.
   static Future<bool?> abrir(
     BuildContext context, {
     required Map<String, dynamic> cliente,
     required OrigenPedido origen,
     int? domicilioId,
     int? detalleRutaId,
-  }) {
+  }) async {
+    // A un cliente inactivo ya no se le levantan pedidos (cubre también el
+    // mapa de ruta)
+    if (cliente['estado'] == 'inactivo') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Este cliente está inactivo: no se le pueden levantar pedidos.',
+          ),
+          backgroundColor: AppColors.warning,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return null;
+    }
+    if (!await requiereJornadaActiva(context)) return null;
+    if (!context.mounted) return null;
     return Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -101,8 +119,9 @@ class _CatalogoProductosScreenState extends State<CatalogoProductosScreen> {
   Future<void> _cargarDatos() async {
     setState(() => _isLoading = true);
     try {
-      final resultP = await _api.get('productos');
-      final resultC = await _api.get('categorias');
+      // Todas las páginas (la API las entrega de 100 en 100)
+      final resultP = await _api.obtenerTodos('productos');
+      final resultC = await _api.obtenerTodos('categorias');
 
       if (resultP['statusCode'] == 200) {
         final data = resultP['data'];

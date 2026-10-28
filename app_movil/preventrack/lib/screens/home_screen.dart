@@ -11,6 +11,7 @@ import 'clientes_screen.dart';
 import 'pedidos_screen.dart';
 import 'entregas_screen.dart';
 import 'jornada_screen.dart';
+import 'monitoreo_screen.dart';
 import 'perfil_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -226,6 +227,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
+              // Monitoreo del equipo solo para el administrador
+              if (admin)
+                ListTile(
+                  leading: const Icon(
+                    Icons.map_outlined,
+                    color: AppColors.primary,
+                  ),
+                  title: const Text('Monitoreo'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MonitoreoScreen(),
+                      ),
+                    );
+                  },
+                ),
               // Jornada laboral solo para colaboradores
               if (!admin)
                 ListTile(

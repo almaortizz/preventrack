@@ -7,6 +7,7 @@ import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/legal_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/sesion_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +23,8 @@ class PreventrackApp extends StatelessWidget {
     return MultiProvider(
       providers: [ChangeNotifierProvider(create: (_) => AuthProvider())],
       child: MaterialApp(
+        // Para mandar al login desde un servicio (sesión terminada)
+        navigatorKey: navegadorGlobal,
         title: 'Preventrack',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.theme,

@@ -84,6 +84,12 @@ class UsuarioController extends Controller
 
         $usuario->update($datos);
 
+        // Si se desactivó desde el formulario, se cierran sus sesiones igual
+        // que al bloquear
+        if (($datos['estado'] ?? null) === 'inactivo') {
+            $usuario->tokens()->delete();
+        }
+
         return response()->json($usuario->load('rol'));
     }
 
@@ -91,6 +97,8 @@ class UsuarioController extends Controller
     public function bloquear(Usuario $usuario)
     {
         $usuario->update(['estado' => 'inactivo']);
+        // Cierra todas sus sesiones abiertas: la app recibe 401 y lo manda al login
+        $usuario->tokens()->delete();
 
         return response()->json(['message' => 'Usuario bloqueado correctamente.', 'usuario' => $usuario]);
     }

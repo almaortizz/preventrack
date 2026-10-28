@@ -15,13 +15,37 @@ export function AuthProvider({ children }) {
     }
     client
       .get('/me')
-      .then((res) => setUser(res.data))
+      .then((res) => {
+        // Sesión guardada de alguien que no es administrador: no se usa
+        if (Number(res.data?.rol_id) !== 1) {
+          localStorage.removeItem('pt_token')
+          return
+        }
+        setUser(res.data)
+      })
       .catch(() => localStorage.removeItem('pt_token'))
       .finally(() => setLoading(false))
   }, [])
 
   async function login(usuario, password) {
     const res = await client.post('/login', { usuario, password })
+
+    // El panel es solo para administradores: se cierra la sesión recién
+    // creada y no se guarda el token
+    if (Number(res.data.usuario?.rol_id) !== 1) {
+      try {
+        await client.post('/logout', null, {
+          headers: { Authorization: `Bearer ${res.data.token}` },
+        })
+      } catch {
+        // si falla, el token simplemente no se usa
+      }
+      const mensaje = 'Este panel es solo para administradores.'
+      const error = new Error(mensaje)
+      error.response = { data: { message: mensaje } }
+      throw error
+    }
+
     localStorage.setItem('pt_token', res.data.token)
     setUser(res.data.usuario ?? null)
     return res.data

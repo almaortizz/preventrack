@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/folio_service.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -20,6 +22,8 @@ class AuthProvider with ChangeNotifier {
     if (hasToken) {
       _usuario = await _authService.getUsuarioGuardado();
       _isLoggedIn = true;
+      // Continuar la numeración de folios (sin esperar: no frena la splash)
+      unawaited(FolioService.actualizarDesdeApi());
     }
     notifyListeners();
   }
@@ -38,6 +42,8 @@ class AuthProvider with ChangeNotifier {
       _isLoggedIn = true;
       _usuario = result['data']['usuario'];
       _error = null;
+      // Si cambió de celular o reinstaló, continuar desde su último folio
+      unawaited(FolioService.actualizarDesdeApi());
       notifyListeners();
       return true;
     } else {
@@ -52,6 +58,16 @@ class AuthProvider with ChangeNotifier {
     await _authService.logout();
     _isLoggedIn = false;
     _usuario = null;
+    notifyListeners();
+  }
+
+  // La API ya no reconoce la sesión (p. ej. el usuario fue bloqueado). El
+  // login muestra el mensaje en su recuadro de error.
+  Future<void> sesionTerminada() async {
+    await _authService.borrarSesionLocal();
+    _isLoggedIn = false;
+    _usuario = null;
+    _error = 'Tu sesión terminó. Inicia sesión de nuevo';
     notifyListeners();
   }
 
