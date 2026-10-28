@@ -191,6 +191,7 @@ class SyncService {
             'iniciar_comida': 'el inicio de la comida',
             'finalizar_comida': 'el fin de la comida',
             'finalizar': 'el fin de la jornada',
+            'cierre_automatico': 'el cierre automático de la jornada',
           };
           final motivo =
               (result['data'] is Map ? result['data']['message'] : null) ?? '';

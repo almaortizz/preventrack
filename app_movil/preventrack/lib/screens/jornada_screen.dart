@@ -41,6 +41,19 @@ class _JornadaScreenState extends State<JornadaScreen> {
     await mostrarRechazosSincronizacion(context);
     if (!mounted) return;
 
+    // Se cerró sola por el límite de horas: se explica una vez
+    final avisoCierre = await JornadaService.tomarAvisoCierre();
+    if (!mounted) return;
+    if (avisoCierre != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(avisoCierre),
+          backgroundColor: AppColors.warning,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+
     setState(() {
       _jornada = jornada;
       _isLoading = false;
@@ -269,6 +282,9 @@ class _JornadaScreenState extends State<JornadaScreen> {
                               ? 'Estado: En comida'
                               : estado == 'no_iniciada'
                               ? 'Estado: No iniciada'
+                              : _jornada?['cierre_automatico'] == true
+                              ? 'Estado: Cerrada automáticamente '
+                                    '(${JornadaService.horasCierreAutomatico} h)'
                               : 'Estado: Finalizada',
                           style: TextStyle(
                             fontSize: 14,

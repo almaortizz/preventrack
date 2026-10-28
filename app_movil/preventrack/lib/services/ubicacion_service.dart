@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'api_service.dart';
+import 'jornada_service.dart';
 
 // Servicio global (singleton) que reporta la ubicación GPS del
 // preventista/repartidor al backend cada 90 segundos mientras su
@@ -50,15 +51,16 @@ class UbicacionService {
   }
 
   Future<void> _reportarUbicacion() async {
+    // Si la jornada cumplió el límite de horas se cierra (en el celular, sin
+    // consultar la API) y se deja de enviar la ubicación
+    if (await JornadaService.cerrarSiVencidaSinConexion()) return;
+
     final position = await obtenerUbicacionActual();
     if (position == null) return;
     try {
       await _api.post(
         'ubicacion',
-        body: {
-          'latitud': position.latitude,
-          'longitud': position.longitude,
-        },
+        body: {'latitud': position.latitude, 'longitud': position.longitude},
       );
     } catch (_) {
       // Si falla, se intenta de nuevo en el siguiente ciclo.

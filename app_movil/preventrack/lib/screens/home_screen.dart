@@ -21,13 +21,29 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _reanudarUbicacionSiHayJornadaActiva();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Al volver a la app (desde segundo plano) se revisa la jornada: si
+  // cumplió el límite de horas se cierra y se detiene el envío de ubicación
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _reanudarUbicacionSiHayJornadaActiva();
+    }
   }
 
   // Si la persona cierra y vuelve a abrir la app mientras ya tenía una

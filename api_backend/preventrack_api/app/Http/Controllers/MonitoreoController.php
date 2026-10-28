@@ -25,6 +25,8 @@ class MonitoreoController extends Controller
             ->get();
 
         $resultado = $preventistas->map(function ($p) use ($hoy) {
+            Jornada::cerrarVencidasDe($p->id);
+
             $jornada = Jornada::where('usuario_id', $p->id)
                 ->whereDate('fecha', $hoy)
                 ->first();

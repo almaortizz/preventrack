@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Jornada;
 use App\Models\Usuario;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -155,6 +156,20 @@ class UsuarioController extends Controller
         ]);
 
         $usuario = $request->user();
+
+        // Solo se registra durante una jornada activa (primero se cierran las
+        // vencidas). Sin jornada se ignora sin error.
+        Jornada::cerrarVencidasDe($usuario->id);
+        $jornadaActiva = Jornada::where('usuario_id', $usuario->id)
+            ->whereNull('hora_fin')
+            ->exists();
+        if (!$jornadaActiva) {
+            return response()->json([
+                'message' => 'Sin jornada activa: la ubicación no se registró.',
+                'registrada' => false,
+            ]);
+        }
+
         $usuario->update([
             'ultima_latitud' => $datos['latitud'],
             'ultima_longitud' => $datos['longitud'],

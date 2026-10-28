@@ -14,10 +14,17 @@ Future<bool> requiereJornadaActiva(BuildContext context) async {
 
   if (await JornadaService.tieneJornadaActiva()) return true;
 
+  // Si se cerró sola por el límite de horas, se explica una vez
+  final avisoCierre = await JornadaService.tomarAvisoCierre();
+
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Debes iniciar tu jornada laboral primero'),
+      SnackBar(
+        content: Text(
+          avisoCierre != null
+              ? '$avisoCierre Inicia una nueva jornada.'
+              : 'Debes iniciar tu jornada laboral primero',
+        ),
         backgroundColor: AppColors.warning,
         duration: Duration(seconds: 3),
       ),
