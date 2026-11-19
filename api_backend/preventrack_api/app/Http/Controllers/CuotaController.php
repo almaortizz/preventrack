@@ -13,7 +13,8 @@ class CuotaController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Cuota::with('usuario');
+        // Con su comisión (si ya se generó) para poder marcarla pagada en el panel
+        $query = Cuota::with(['usuario', 'comisiones']);
 
         if ($request->filled('usuario_id')) {
             $query->where('usuario_id', $request->usuario_id);

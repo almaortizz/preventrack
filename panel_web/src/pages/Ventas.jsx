@@ -852,7 +852,8 @@ export default function Ventas() {
                     </p>
                     {(() => {
                       const duracion = calcularDuracionCreacion(detalleAbierto)
-                      const sospechoso = duracion !== null && duracion < 5
+                      // Mismo criterio que la API (alertas anti-fraude): menos de 30 s
+                      const sospechoso = duracion !== null && duracion < 30
                       return (
                         <p className={`font-semibold mt-1 ${sospechoso ? 'text-red-600' : 'text-neutral-800'}`}>
                           Duración: {formatearDuracion(duracion)}

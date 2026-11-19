@@ -111,20 +111,40 @@ class UsuarioController extends Controller
         return response()->json(['message' => 'Usuario desbloqueado correctamente.', 'usuario' => $usuario]);
     }
 
-    // Bloquear a TODOS los colaboradores de un jalón (bloqueo general)
-    public function bloquearTodos(Request $request)
+    // Bloqueo general: TODOS los preventistas activos de un jalón. Los
+    // administradores nunca se bloquean aquí (si no, nadie podría entrar al
+    // panel). Igual que el bloqueo individual, se cierran sus sesiones.
+    public function bloquearTodos()
     {
-        $query = Usuario::query();
+        $preventistas = Usuario::where('rol_id', 2)->where('estado', 'activo')->get();
 
-        // Por seguridad, permite excluir al rol de administrador si se desea
-        if ($request->filled('excluir_rol_id')) {
-            $query->where('rol_id', '!=', $request->excluir_rol_id);
+        foreach ($preventistas as $preventista) {
+            $preventista->update(['estado' => 'inactivo']);
+            $preventista->tokens()->delete();
         }
 
-        $afectados = $query->update(['estado' => 'inactivo']);
+        $total = $preventistas->count();
 
         return response()->json([
-            'message' => 'Se bloquearon ' . $afectados . ' usuario(s) correctamente.',
+            'message' => $total === 1
+                ? 'Se bloqueó 1 preventista.'
+                : "Se bloquearon {$total} preventistas.",
+            'afectados' => $total,
+        ]);
+    }
+
+    // Desbloqueo general: todos los preventistas bloqueados
+    public function desbloquearTodos()
+    {
+        $total = Usuario::where('rol_id', 2)
+            ->where('estado', 'inactivo')
+            ->update(['estado' => 'activo']);
+
+        return response()->json([
+            'message' => $total === 1
+                ? 'Se desbloqueó 1 preventista.'
+                : "Se desbloquearon {$total} preventistas.",
+            'afectados' => $total,
         ]);
     }
 

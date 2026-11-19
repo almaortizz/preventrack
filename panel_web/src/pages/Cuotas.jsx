@@ -223,6 +223,29 @@ export default function Cuotas() {
     }
   }
 
+  // Comisión generada al cumplir la cuota (la más reciente, si hubiera varias)
+  function comisionDe(cuota) {
+    const lista = cuota.comisiones ?? []
+    return lista.length ? lista.reduce((a, b) => (b.id > a.id ? b : a)) : null
+  }
+
+  async function marcarPagada(cuota, comision) {
+    const nombre = cuota.usuario ? `${cuota.usuario.nombre} ${cuota.usuario.apellidos}` : 'el preventista'
+    if (
+      !confirm(
+        `¿Marcar como pagada la comisión de $${Number(comision.monto).toFixed(2)} de ${nombre}? ` +
+          'El preventista lo verá en su Inicio de la app.',
+      )
+    )
+      return
+    try {
+      await client.post(`/comisiones/${comision.id}/marcar-pagada`)
+      cargar()
+    } catch (err) {
+      alert(err.response?.data?.message || 'No se pudo marcar la comisión como pagada.')
+    }
+  }
+
   async function eliminar(cuota) {
     if (!confirm(`¿Eliminar la cuota de ${cuota.usuario?.nombre} para esa semana?`)) return
     try {
@@ -268,13 +291,14 @@ export default function Cuotas() {
               <th className="px-4 py-3">Comisión si cumple</th>
               <th className="px-4 py-3">Alcanzado</th>
               <th className="px-4 py-3">Estado</th>
+              <th className="px-4 py-3">Comisión</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-neutral-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-neutral-400">
                   Cargando...
                 </td>
               </tr>
@@ -301,6 +325,29 @@ export default function Cuotas() {
                       {c.cumplida ? 'Cumplida' : 'En progreso'}
                     </span>
                   </td>
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const comision = comisionDe(c)
+                      if (!comision) return <span className="text-neutral-400">—</span>
+                      const monto = `$${Number(comision.monto).toFixed(2)}`
+                      if (comision.estado === 'pagada') {
+                        return (
+                          <span className="text-green-700 font-medium">{monto} — Pagada ✓</span>
+                        )
+                      }
+                      return (
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="text-amber-700">{monto} — Pendiente de pago</span>
+                          <button
+                            onClick={() => marcarPagada(c, comision)}
+                            className="text-green-600 font-medium hover:underline"
+                          >
+                            Marcar pagada
+                          </button>
+                        </span>
+                      )
+                    })()}
+                  </td>
                   <td className="px-4 py-3 text-right space-x-3">
                     <button
                       onClick={() => abrirEditar(c)}
@@ -319,7 +366,7 @@ export default function Cuotas() {
               ))
             ) : (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-neutral-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-neutral-400">
                   No hay cuotas registradas.
                 </td>
               </tr>

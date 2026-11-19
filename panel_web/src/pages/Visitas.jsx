@@ -135,6 +135,7 @@ export default function Visitas() {
             <option value="">Todos</option>
             <option value="venta">Con venta</option>
             <option value="sin_venta">Sin venta</option>
+            <option value="no_disponible">No disponible</option>
           </select>
         </div>
 

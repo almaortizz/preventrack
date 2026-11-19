@@ -21,9 +21,14 @@ class DashboardController extends Controller
         $inicioMes = Carbon::now('America/Mexico_City')->startOfMonth()->toDateString();
         $finMes = Carbon::now('America/Mexico_City')->endOfMonth()->toDateString();
 
-        // Todo lo del dashboard del preventista es de SUS pedidos
-        $userId = auth('sanctum')->id();
-        $misVentas = fn () => Venta::where('preventista_vendedor_id', $userId);
+        // Preventista: todo es de SUS pedidos. Administrador (Inicio del panel
+        // web): se cuentan los pedidos de todos.
+        $usuario = auth('sanctum')->user();
+        $userId = $usuario->id;
+        $esAdmin = (int) $usuario->rol_id === 1;
+        $misVentas = fn () => $esAdmin
+            ? Venta::query()
+            : Venta::where('preventista_vendedor_id', $userId);
 
         // --- Contadores por estado ---
         $pendientes = $misVentas()->where('estado', 'pendiente')->count();
@@ -63,7 +68,7 @@ class DashboardController extends Controller
         $totalProductos = Producto::count();
 
                 // --- Cuota semanal ---
-        $cuota = Cuota::vigente($userId, $hoy);
+        $cuota = $esAdmin ? null : Cuota::vigente($userId, $hoy);
 
         $cuotaData = null;
         if ($cuota) {

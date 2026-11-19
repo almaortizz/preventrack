@@ -62,6 +62,12 @@ class ComisionController extends Controller
     // El administrador marca la comisión como pagada
     public function marcarPagada(Comision $comision)
     {
+        if ($comision->estado === 'pagada') {
+            throw ValidationException::withMessages([
+                'comision' => ['Esta comisión ya está marcada como pagada.'],
+            ]);
+        }
+
         $comision->update(['estado' => 'pagada']);
 
         return response()->json($comision);

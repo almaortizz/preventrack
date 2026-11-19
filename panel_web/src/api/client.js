@@ -5,6 +5,11 @@ import axios from 'axios'
 // VITE_API_URL=http://127.0.0.1:8000/api. Si no está, se usa la de siempre.
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://preventrack.local/api'
 
+// Dirección de los archivos públicos (imágenes de productos): la misma de la
+// API cambiando el "/api" final por "/storage/", p. ej.
+// http://127.0.0.1:8000/api → http://127.0.0.1:8000/storage/
+export const STORAGE_URL = API_BASE_URL.replace(/\/api\/?$/, '') + '/storage/'
+
 const client = axios.create({
   baseURL: API_BASE_URL,
   headers: {

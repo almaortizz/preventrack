@@ -129,6 +129,10 @@ export default function Preventistas() {
   const [form, setForm] = useState(emptyForm)
   const [formError, setFormError] = useState('')
 
+  // Bloqueo / desbloqueo general
+  const [accionGeneral, setAccionGeneral] = useState(false)
+  const [avisoGeneral, setAvisoGeneral] = useState('')
+
   // Historial
   const [historialAbierto, setHistorialAbierto] = useState(null) // preventista seleccionado
   const [historialVentas, setHistorialVentas] = useState([])
@@ -225,6 +229,49 @@ export default function Preventistas() {
       setFormError(
         err.response?.data?.message || 'Ocurrió un error al guardar el preventista.',
       )
+    }
+  }
+
+  // --- Bloqueo / desbloqueo general ---
+
+  async function bloquearTodos() {
+    const activos = preventistas.filter((p) => p.estado === 'activo').length
+    if (
+      !confirm(
+        `Se bloquearán ${activos} preventista${activos === 1 ? '' : 's'} activo${activos === 1 ? '' : 's'} ` +
+          'y se cerrarán sus sesiones en la app. Los administradores no se bloquean. ¿Continuar?',
+      )
+    )
+      return
+    setAccionGeneral(true)
+    try {
+      const res = await client.post('/usuarios/bloquear-todos')
+      setAvisoGeneral(res.data.message)
+      cargar()
+    } catch {
+      alert('No se pudo bloquear a los preventistas.')
+    } finally {
+      setAccionGeneral(false)
+    }
+  }
+
+  async function desbloquearTodos() {
+    const bloqueados = preventistas.filter((p) => p.estado !== 'activo').length
+    if (
+      !confirm(
+        `Se desbloquearán ${bloqueados} preventista${bloqueados === 1 ? '' : 's'} y podrán volver a iniciar sesión. ¿Continuar?`,
+      )
+    )
+      return
+    setAccionGeneral(true)
+    try {
+      const res = await client.post('/usuarios/desbloquear-todos')
+      setAvisoGeneral(res.data.message)
+      cargar()
+    } catch {
+      alert('No se pudo desbloquear a los preventistas.')
+    } finally {
+      setAccionGeneral(false)
     }
   }
 
@@ -571,6 +618,33 @@ export default function Preventistas() {
           </button>
         </div>
       </div>
+
+      {/* Bloqueo / desbloqueo general (solo preventistas) */}
+      <div className="flex flex-wrap items-center justify-end gap-3 -mt-3 mb-4">
+        <button
+          onClick={desbloquearTodos}
+          disabled={accionGeneral || !preventistas.some((p) => p.estado !== 'activo')}
+          className="border border-green-600 text-green-700 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-green-50 disabled:opacity-40 disabled:hover:bg-transparent"
+        >
+          Desbloquear a todos
+        </button>
+        <button
+          onClick={bloquearTodos}
+          disabled={accionGeneral || !preventistas.some((p) => p.estado === 'activo')}
+          className="border border-red-600 text-red-600 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent"
+        >
+          Bloquear a todos
+        </button>
+      </div>
+
+      {avisoGeneral && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
+          <span>{avisoGeneral}</span>
+          <button onClick={() => setAvisoGeneral('')} className="font-semibold hover:underline">
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 

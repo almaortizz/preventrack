@@ -127,5 +127,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('usuarios/{usuario}/bloquear', [UsuarioController::class, 'bloquear']);
         Route::post('usuarios/{usuario}/desbloquear', [UsuarioController::class, 'desbloquear']);
         Route::post('usuarios/bloquear-todos', [UsuarioController::class, 'bloquearTodos']);
+        Route::post('usuarios/desbloquear-todos', [UsuarioController::class, 'desbloquearTodos']);
     });
 });

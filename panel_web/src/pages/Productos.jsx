@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
-import client, { obtenerTodos } from '../api/client'
-
-const STORAGE_URL = 'http://preventrack.local/storage/'
+import client, { obtenerTodos, STORAGE_URL } from '../api/client'
 
 const emptyForm = {
   codigo: '',
