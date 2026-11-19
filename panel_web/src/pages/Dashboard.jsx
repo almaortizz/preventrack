@@ -22,6 +22,64 @@ function rangoFechas(tipo) {
   return { fecha_inicio: fin, fecha_fin: fin }
 }
 
+function Figura({ children, color }) {
+  return (
+    <div className={`flex items-center justify-center w-12 h-12 rounded-full shrink-0 ${color}`}>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {children}
+      </svg>
+    </div>
+  )
+}
+
+const FIGURAS = {
+  'Ventas hoy': (
+    <Figura color="bg-green-100 text-green-600">
+      <rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" />
+    </Figura>
+  ),
+  'Ventas de la semana': (
+    <Figura color="bg-blue-100 text-blue-600">
+      <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
+    </Figura>
+  ),
+  'Ventas del mes': (
+    <Figura color="bg-indigo-100 text-indigo-600">
+      <path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" />
+    </Figura>
+  ),
+  Pendientes: (
+    <Figura color="bg-amber-100 text-amber-600">
+      <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+    </Figura>
+  ),
+  'En ruta': (
+    <Figura color="bg-sky-100 text-sky-600">
+      <path d="M1 6h13v10H1z" /><path d="M14 9h4l4 4v3h-8z" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" />
+    </Figura>
+  ),
+  'Entregados hoy': (
+    <Figura color="bg-emerald-100 text-emerald-600">
+      <circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" />
+    </Figura>
+  ),
+  'Cancelados hoy': (
+    <Figura color="bg-red-100 text-red-600">
+      <circle cx="12" cy="12" r="9" /><path d="M15 9l-6 6M9 9l6 6" />
+    </Figura>
+  ),
+  Clientes: (
+    <Figura color="bg-purple-100 text-purple-600">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" /><circle cx="10" cy="7" r="4" /><path d="M21 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </Figura>
+  ),
+  Productos: (
+    <Figura color="bg-orange-100 text-orange-600">
+      <path d="M21 8l-9-5-9 5v8l9 5 9-5z" /><path d="M3 8l9 5 9-5" /><path d="M12 13v8" />
+    </Figura>
+  ),
+}
+
 const COLUMNAS_VENTAS = [
   { t: 'Pedido', v: (v) => v.numero_orden ?? v.id },
   { t: 'Cliente', v: (v) => v.domicilio?.cliente?.nombre_negocio ?? '—' },
@@ -116,10 +174,15 @@ export default function Dashboard() {
             onClick={() => abrirDetalle(card)}
             className="text-left bg-white rounded-xl shadow-sm p-5 border border-neutral-100 hover:shadow-md hover:border-secondary transition cursor-pointer"
           >
-            <p className="text-sm text-neutral-400">{card.label}</p>
-            <p className="text-3xl font-bold text-primary mt-2">
-              {card.value}
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm text-neutral-400">{card.label}</p>
+                <p className="text-3xl font-bold text-primary mt-2">
+                  {card.value}
+                </p>
+              </div>
+              {FIGURAS[card.label]}
+            </div>
             <p className="text-xs text-secondary mt-2">Ver detalle →</p>
           </button>
         ))}
