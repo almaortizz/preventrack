@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
+import '../services/ubicacion_service.dart';
+import '../widgets/confirmar_cerrar_sesion.dart';
 
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
@@ -231,6 +233,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
             Center(
               child: OutlinedButton(
                 onPressed: () async {
+                  // Con operaciones sin subir: intenta subirlas y avisa
+                  if (!await confirmarCerrarSesion(context)) return;
+                  if (!context.mounted) return;
+                  // Igual que en el menú: deja de enviar la ubicación
+                  UbicacionService.instancia.detener();
                   final auth = Provider.of<AuthProvider>(
                     context,
                     listen: false,

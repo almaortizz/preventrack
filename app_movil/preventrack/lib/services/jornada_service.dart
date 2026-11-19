@@ -27,6 +27,15 @@ class JornadaService {
 
   // true si la última carga no pudo hablar con la API
   static bool sinConexion = false;
+
+  /// Celular compartido: al entrar otro usuario se borra la jornada guardada
+  /// del anterior (con conexión se vuelve a consultar la del nuevo).
+  static Future<void> borrarDatosLocales() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_claveLocal);
+    await prefs.remove(_claveAvisoCierre);
+  }
+
   // Mensaje de la API cuando rechaza un registro (p. ej. orden incorrecto)
   static String? ultimoError;
 

@@ -250,13 +250,13 @@ class SyncService {
     String motivo,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    final lista = await obtenerPedidosRechazados();
+    final lista = await _todosLosRechazados();
     lista.add({'pedido': body, 'motivo': motivo});
     await prefs.setString(_clavePedidosRechazados, jsonEncode(lista));
   }
 
-  /// Copias de pedidos rechazados por folio, guardadas en el celular
-  static Future<List<Map<String, dynamic>>> obtenerPedidosRechazados() async {
+  // Todas las copias guardadas en el celular (de cualquier usuario)
+  static Future<List<Map<String, dynamic>>> _todosLosRechazados() async {
     final prefs = await SharedPreferences.getInstance();
     final guardado = prefs.getString(_clavePedidosRechazados);
     if (guardado == null) return [];
@@ -265,12 +265,38 @@ class SyncService {
         .toList();
   }
 
+  // Posiciones (en la lista completa) de las copias del usuario con sesión.
+  // El pedido trae el id de quien lo levantó; si no lo trae, se muestra.
+  static Future<List<int>> _posicionesDelUsuario(
+    List<Map<String, dynamic>> todos,
+  ) async {
+    final usuarioId = await DatabaseService.usuarioActualId();
+    final posiciones = <int>[];
+    for (var i = 0; i < todos.length; i++) {
+      final pedido = todos[i]['pedido'];
+      final duenio = pedido is Map ? pedido['preventista_vendedor_id'] : null;
+      if (duenio == null || usuarioId == null || '$duenio' == '$usuarioId') {
+        posiciones.add(i);
+      }
+    }
+    return posiciones;
+  }
+
+  /// Copias de pedidos rechazados por folio del usuario con sesión
+  static Future<List<Map<String, dynamic>>> obtenerPedidosRechazados() async {
+    final todos = await _todosLosRechazados();
+    final posiciones = await _posicionesDelUsuario(todos);
+    return [for (final i in posiciones) todos[i]];
+  }
+
+  // `indice` es la posición dentro de obtenerPedidosRechazados()
   static Future<void> _quitarPedidoRechazado(int indice) async {
     final prefs = await SharedPreferences.getInstance();
-    final lista = await obtenerPedidosRechazados();
-    if (indice < 0 || indice >= lista.length) return;
-    lista.removeAt(indice);
-    await prefs.setString(_clavePedidosRechazados, jsonEncode(lista));
+    final todos = await _todosLosRechazados();
+    final posiciones = await _posicionesDelUsuario(todos);
+    if (indice < 0 || indice >= posiciones.length) return;
+    todos.removeAt(posiciones[indice]);
+    await prefs.setString(_clavePedidosRechazados, jsonEncode(todos));
   }
 
   /// Vuelve a poner en la cola el pedido rechazado con un folio nuevo y lo

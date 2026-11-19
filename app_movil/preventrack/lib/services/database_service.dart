@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -21,7 +22,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _crearTablas,
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: se guarda la imagen del producto para el modo sin conexión.
@@ -35,6 +36,12 @@ class DatabaseService {
         // v4: última consulta de Pedidos e Inicio para el modo sin conexión.
         if (oldVersion < 4) {
           await _crearTablaCopias(db);
+        }
+        // v5: de quién es cada operación pendiente (celular compartido).
+        if (oldVersion < 5) {
+          await db.execute(
+            'ALTER TABLE operaciones_pendientes ADD COLUMN usuario_id INTEGER',
+          );
         }
       },
     );
@@ -89,7 +96,8 @@ class DatabaseService {
         endpoint TEXT,
         metodo TEXT,
         body TEXT,
-        fecha_creacion TEXT
+        fecha_creacion TEXT,
+        usuario_id INTEGER
       )
     ''');
 
@@ -329,10 +337,11 @@ class DatabaseService {
   static Future<List<Map<String, dynamic>>> obtenerPedidosEnCola() async {
     if (!isAvailable) return [];
     final db = await database;
+    final (where, args) = await _filtroDelUsuario();
     final operaciones = await db.query(
       'operaciones_pendientes',
-      where: 'tipo = ?',
-      whereArgs: ['crear_pedido'],
+      where: 'tipo = ? AND $where',
+      whereArgs: ['crear_pedido', ...args],
       orderBy: 'id DESC',
     );
     final pedidos = <Map<String, dynamic>>[];
@@ -342,6 +351,28 @@ class DatabaseService {
       pedidos.add(jsonDecode(bodyStr) as Map<String, dynamic>);
     }
     return pedidos;
+  }
+
+  /// Id del usuario con sesión en el celular (null si no hay sesión)
+  static Future<int?> usuarioActualId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final usuarioStr = prefs.getString('usuario');
+    if (usuarioStr == null) return null;
+    try {
+      final usuario = jsonDecode(usuarioStr) as Map<String, dynamic>;
+      return int.tryParse('${usuario['id']}');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Celular compartido: cada operación es de quien la hizo y solo se ve y se
+  // sube con su sesión. Las de antes de la v5 (sin dueño) se tratan como del
+  // usuario con sesión, como antes.
+  static Future<(String, List<Object?>)> _filtroDelUsuario() async {
+    final usuarioId = await usuarioActualId();
+    if (usuarioId == null) return ('usuario_id IS NULL', <Object?>[]);
+    return ('(usuario_id IS NULL OR usuario_id = ?)', <Object?>[usuarioId]);
   }
 
   static Future<void> guardarOperacionPendiente({
@@ -359,14 +390,22 @@ class DatabaseService {
       'metodo': metodo,
       'body': body != null ? jsonEncode(body) : null,
       'fecha_creacion': DateTime.now().toIso8601String(),
+      'usuario_id': await usuarioActualId(),
     });
   }
 
+  /// Operaciones pendientes del usuario con sesión
   static Future<List<Map<String, dynamic>>>
   obtenerOperacionesPendientes() async {
     if (!isAvailable) return [];
     final db = await database;
-    return await db.query('operaciones_pendientes', orderBy: 'id ASC');
+    final (where, args) = await _filtroDelUsuario();
+    return await db.query(
+      'operaciones_pendientes',
+      where: where,
+      whereArgs: args,
+      orderBy: 'id ASC',
+    );
   }
 
   static Future<void> eliminarOperacionPendiente(int id) async {
@@ -404,13 +443,27 @@ class DatabaseService {
     return false;
   }
 
+  /// Cuántas operaciones pendientes tiene el usuario con sesión
   static Future<int> contarOperacionesPendientes() async {
     if (!isAvailable) return 0;
     final db = await database;
+    final (where, args) = await _filtroDelUsuario();
     final result = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM operaciones_pendientes',
+      'SELECT COUNT(*) as count FROM operaciones_pendientes WHERE $where',
+      args,
     );
     return result.first['count'] as int;
+  }
+
+  /// Al entrar un usuario distinto al anterior en este celular: se borran
+  /// los datos que son de una persona (su ruta del día y sus entregas).
+  /// Clientes, productos y categorías son de todos y se conservan; la cola
+  /// no se toca (cada operación ya sabe de quién es).
+  static Future<void> limpiarDatosDelUsuarioAnterior() async {
+    if (!isAvailable) return;
+    final db = await database;
+    await db.delete('ruta_del_dia');
+    await db.delete('entregas');
   }
 
   // ═══════════════════════════════════════════

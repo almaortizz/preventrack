@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import 'database_service.dart';
+import 'jornada_service.dart';
 
 class AuthService {
   // Login: envía usuario y password, guarda el token
@@ -41,6 +43,7 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('token', data['token']);
       await prefs.setString('usuario', jsonEncode(data['usuario']));
+      await _revisarCambioDeUsuario(prefs, data['usuario']);
       return {'success': true, 'data': data};
     } else {
       return {
@@ -48,6 +51,26 @@ class AuthService {
         'message': data['message'] ?? 'Error al iniciar sesión',
       };
     }
+  }
+
+  // Celular compartido: si entra alguien distinto al último usuario que
+  // inició sesión aquí, se borra la ruta del día, las entregas y la jornada
+  // guardadas del anterior. Como iniciar sesión requiere conexión, el nuevo
+  // usuario las vuelve a descargar. La cola de cada quien se conserva.
+  static const _claveUltimoUsuario = 'ultimo_usuario_id';
+
+  Future<void> _revisarCambioDeUsuario(
+    SharedPreferences prefs,
+    dynamic usuario,
+  ) async {
+    final nuevo = int.tryParse('${usuario is Map ? usuario['id'] : ''}');
+    if (nuevo == null) return;
+    final anterior = prefs.getInt(_claveUltimoUsuario);
+    if (anterior != nuevo) {
+      await DatabaseService.limpiarDatosDelUsuarioAnterior();
+      await JornadaService.borrarDatosLocales();
+    }
+    await prefs.setInt(_claveUltimoUsuario, nuevo);
   }
 
   // Logout: elimina el token del servidor y del almacenamiento local

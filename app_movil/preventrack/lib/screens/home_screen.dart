@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../services/jornada_service.dart';
 import '../services/ubicacion_service.dart';
 import '../widgets/barra_navegacion_flotante.dart';
+import '../widgets/confirmar_cerrar_sesion.dart';
 import 'dashboard_screen.dart';
 import 'dashboard_admin_screen.dart';
 import 'clientes_screen.dart';
@@ -306,6 +307,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   onTap: () async {
                     Navigator.pop(context);
+                    // Con operaciones sin subir: intenta subirlas y avisa
+                    if (!await confirmarCerrarSesion(context)) return;
+                    if (!context.mounted) return;
                     UbicacionService.instancia.detener();
                     final authProvider = Provider.of<AuthProvider>(
                       context,
