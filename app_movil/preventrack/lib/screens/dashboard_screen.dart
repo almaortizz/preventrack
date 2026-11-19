@@ -8,6 +8,7 @@ import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/sync_service.dart';
 import '../widgets/aviso_rechazos.dart';
+import '../widgets/aviso_datos_guardados.dart';
 import 'detalle_pedido_screen.dart';
 import 'catalogo_productos_screen.dart';
 
@@ -28,6 +29,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Copias de pedidos rechazados por folio, para reenviarlos
   List<Map<String, dynamic>> _rechazados = [];
 
+  // Mostrando la copia guardada (sin conexión): de qué hora es y por qué
+  bool _usandoCopia = false;
+  DateTime? _fechaCopia;
+  bool _sinConexion = true;
+
   @override
   void initState() {
     super.initState();
@@ -35,19 +41,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _sincronizarPendientes();
   }
 
+  int? get _usuarioId => int.tryParse(
+    '${Provider.of<AuthProvider>(context, listen: false).usuario?['id']}',
+  );
+
   Future<void> _cargarDashboard() async {
     setState(() => _isLoading = true);
+    final usuarioId = _usuarioId;
+    var sinConexion = true;
     try {
-      final result = await _api.get('dashboard');
+      final result = await _api
+          .get('dashboard')
+          .timeout(const Duration(seconds: 15));
       if (result['statusCode'] == 200) {
+        await DatabaseService.guardarCopia(
+          'dashboard',
+          usuarioId,
+          result['data'],
+        );
+        if (!mounted) return;
         setState(() {
           _dashboardData = result['data'];
+          _usandoCopia = false;
           _isLoading = false;
         });
+        return;
       }
+      sinConexion = false; // la API respondió, pero con error
     } catch (e) {
-      setState(() => _isLoading = false);
+      // Sin conexión
     }
+
+    // Se muestra la última consulta guardada en el celular (o nada, con el
+    // aviso de que no hay datos guardados; antes se veía todo en ceros)
+    final copia = await DatabaseService.obtenerCopia('dashboard', usuarioId);
+    if (!mounted) return;
+    setState(() {
+      if (copia != null) {
+        _dashboardData = Map<String, dynamic>.from(copia['datos'] as Map);
+        _fechaCopia = copia['fecha'] as DateTime?;
+      } else {
+        _fechaCopia = null;
+      }
+      _usandoCopia = true;
+      _sinConexion = sinConexion;
+      _isLoading = false;
+    });
   }
 
   Future<void> _cargarRechazados() async {
@@ -91,9 +130,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
       // Recargar dashboard sin mostrar spinner
       try {
+        final usuarioId = _usuarioId;
         final result = await _api.get('dashboard');
         if (result['statusCode'] == 200 && mounted) {
-          setState(() => _dashboardData = result['data']);
+          setState(() {
+            _dashboardData = result['data'];
+            _usandoCopia = false;
+          });
+          await DatabaseService.guardarCopia(
+            'dashboard',
+            usuarioId,
+            result['data'],
+          );
         }
       } catch (_) {}
       // Ocultar mensaje después de 4 segundos
@@ -395,6 +443,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
+                // Sin conexión: datos guardados y de qué hora son
+                if (_usandoCopia)
+                  AvisoDatosGuardados(
+                    fecha: _fechaCopia,
+                    sinConexion: _sinConexion,
+                    margin: const EdgeInsets.only(bottom: 12),
+                  ),
                 // Banner de sincronización
                 if (_syncMensaje != null)
                   Container(

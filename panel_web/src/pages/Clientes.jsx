@@ -223,10 +223,8 @@ export default function Clientes() {
     setHistorialCliente(cliente)
     setHistorialLoading(true)
     try {
-      const res = await client.get('/ventas', {
-        params: { cliente_id: cliente.id, per_page: 100 },
-      })
-      setHistorialVentas(res.data.data ?? [])
+      // Todas las páginas
+      setHistorialVentas(await obtenerTodos('/ventas', { cliente_id: cliente.id }))
     } catch {
       setHistorialVentas([])
     } finally {

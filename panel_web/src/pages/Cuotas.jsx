@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import client from '../api/client'
+import client, { obtenerTodos } from '../api/client'
+import Paginacion from '../components/Paginacion'
 
 const ROL_COLABORADOR = 2
 
@@ -63,35 +64,50 @@ export default function Cuotas() {
 
   const [formError, setFormError] = useState('')
 
+  // Paginación (la API entrega 20 por página)
+  const [pagina, setPagina] = useState(1)
+  const [meta, setMeta] = useState(null)
+
   function cargar() {
     setLoading(true)
     client
-      .get('/cuotas')
-      .then((res) => setCuotas(res.data.data ?? []))
+      .get('/cuotas', { params: { page: pagina } })
+      .then((res) => {
+        // Si se borró lo último de la página, se pasa a la anterior
+        if (pagina > 1 && res.data.last_page && pagina > res.data.last_page) {
+          setPagina(res.data.last_page)
+          return
+        }
+        setCuotas(res.data.data ?? [])
+        setMeta(res.data)
+      })
       .catch(() => setError('No se pudo cargar la lista de cuotas.'))
       .finally(() => setLoading(false))
   }
 
   function cargarPreventistas() {
-    client.get('/usuarios').then((res) => {
-      const todos = res.data.data ?? []
+    obtenerTodos('/usuarios').then((todos) =>
       setPreventistas(
         todos.filter((u) => u.rol_id === ROL_COLABORADOR && u.estado === 'activo'),
-      )
-    })
+      ),
+    )
   }
 
   useEffect(() => {
-    cargar()
     cargarPreventistas()
   }, [])
 
+  useEffect(() => {
+    cargar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagina])
+
   // Al abrir el formulario o cambiar de semana: quién ya tiene cuota esa semana
+  // (todas las páginas)
   useEffect(() => {
     if (!showNueva) return
-    client
-      .get('/cuotas', { params: { semana } })
-      .then((res) => setConCuota((res.data.data ?? []).map((c) => c.usuario_id)))
+    obtenerTodos('/cuotas', { semana })
+      .then((todas) => setConCuota(todas.map((c) => c.usuario_id)))
       .catch(() => setConCuota([]))
   }, [showNueva, semana])
 
@@ -311,6 +327,8 @@ export default function Cuotas() {
           </tbody>
         </table>
       </div>
+
+      <Paginacion meta={meta} onCambiar={setPagina} />
 
       {/* ── Nueva cuota: varios preventistas a la vez ── */}
       {showNueva && (

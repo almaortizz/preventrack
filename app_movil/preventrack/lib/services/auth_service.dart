@@ -6,16 +6,35 @@ import '../config/api_config.dart';
 class AuthService {
   // Login: envía usuario y password, guarda el token
   Future<Map<String, dynamic>> login(String usuario, String password) async {
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/login'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: jsonEncode({'usuario': usuario, 'password': password}),
-    );
+    final http.Response response;
+    try {
+      // Sin conexión la petición falla o se queda esperando: máximo 15 s
+      response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/login'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({'usuario': usuario, 'password': password}),
+          )
+          .timeout(const Duration(seconds: 15));
+    } catch (_) {
+      return {
+        'success': false,
+        'message':
+            'Sin conexión. Para iniciar sesión se necesita internet; '
+            'revisa la conexión e intenta de nuevo.',
+      };
+    }
 
-    final data = jsonDecode(response.body);
+    // La API respondió, pero con algo que no se puede leer (error del servidor)
+    final dynamic data;
+    try {
+      data = jsonDecode(response.body);
+    } catch (_) {
+      return {'success': false, 'message': 'Error al iniciar sesión'};
+    }
 
     if (response.statusCode == 200) {
       // Guardar token en almacenamiento local
@@ -37,14 +56,18 @@ class AuthService {
     final token = prefs.getString('token');
 
     if (token != null) {
+      // Se avisa a la API (máximo 5 s); sin conexión se cierra igual en el
+      // celular, sin quedarse esperando
       try {
-        await http.post(
-          Uri.parse('${ApiConfig.baseUrl}/logout'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Accept': 'application/json',
-          },
-        );
+        await http
+            .post(
+              Uri.parse('${ApiConfig.baseUrl}/logout'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Accept': 'application/json',
+              },
+            )
+            .timeout(const Duration(seconds: 5));
       } catch (_) {}
     }
 

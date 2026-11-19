@@ -21,7 +21,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _crearTablas,
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: se guarda la imagen del producto para el modo sin conexión.
@@ -31,6 +31,10 @@ class DatabaseService {
         // v3: lista de entregas para el modo sin conexión.
         if (oldVersion < 3) {
           await _crearTablaEntregas(db);
+        }
+        // v4: última consulta de Pedidos e Inicio para el modo sin conexión.
+        if (oldVersion < 4) {
+          await _crearTablaCopias(db);
         }
       },
     );
@@ -90,6 +94,7 @@ class DatabaseService {
     ''');
 
     await _crearTablaEntregas(db);
+    await _crearTablaCopias(db);
   }
 
   static Future<void> _crearTablaEntregas(Database db) async {
@@ -97,6 +102,19 @@ class DatabaseService {
       CREATE TABLE entregas (
         id INTEGER PRIMARY KEY,
         datos TEXT
+      )
+    ''');
+  }
+
+  // Copia de la última consulta de una pantalla (p. ej. 'pedidos' o
+  // 'dashboard'), con el usuario al que pertenece y la hora en que se guardó
+  static Future<void> _crearTablaCopias(Database db) async {
+    await db.execute('''
+      CREATE TABLE copias_consulta (
+        clave TEXT PRIMARY KEY,
+        usuario_id INTEGER,
+        datos TEXT,
+        fecha TEXT
       )
     ''');
   }
@@ -263,8 +281,68 @@ class DatabaseService {
   }
 
   // ═══════════════════════════════════════════
+  //  COPIAS DE CONSULTAS (Pedidos, Inicio)
+  // ═══════════════════════════════════════════
+
+  /// Guarda la última respuesta de una pantalla para verla sin conexión.
+  static Future<void> guardarCopia(
+    String clave,
+    int? usuarioId,
+    dynamic datos,
+  ) async {
+    if (!isAvailable || usuarioId == null) return;
+    final db = await database;
+    await db.insert('copias_consulta', {
+      'clave': clave,
+      'usuario_id': usuarioId,
+      'datos': jsonEncode(datos),
+      'fecha': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Regresa {'datos', 'fecha'} de la última copia, solo si es del mismo
+  /// usuario (en un celular compartido no se ven los datos de otro).
+  static Future<Map<String, dynamic>?> obtenerCopia(
+    String clave,
+    int? usuarioId,
+  ) async {
+    if (!isAvailable || usuarioId == null) return null;
+    final db = await database;
+    final rows = await db.query(
+      'copias_consulta',
+      where: 'clave = ? AND usuario_id = ?',
+      whereArgs: [clave, usuarioId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return {
+      'datos': jsonDecode(rows.first['datos'] as String),
+      'fecha': DateTime.tryParse(rows.first['fecha'] as String? ?? ''),
+    };
+  }
+
+  // ═══════════════════════════════════════════
   //  OPERACIONES PENDIENTES (SYNC)
   // ═══════════════════════════════════════════
+
+  /// Pedidos levantados sin conexión que siguen en la cola (sin subir)
+  static Future<List<Map<String, dynamic>>> obtenerPedidosEnCola() async {
+    if (!isAvailable) return [];
+    final db = await database;
+    final operaciones = await db.query(
+      'operaciones_pendientes',
+      where: 'tipo = ?',
+      whereArgs: ['crear_pedido'],
+      orderBy: 'id DESC',
+    );
+    final pedidos = <Map<String, dynamic>>[];
+    for (final op in operaciones) {
+      final bodyStr = op['body'] as String?;
+      if (bodyStr == null) continue;
+      pedidos.add(jsonDecode(bodyStr) as Map<String, dynamic>);
+    }
+    return pedidos;
+  }
 
   static Future<void> guardarOperacionPendiente({
     required String tipo,
@@ -347,6 +425,7 @@ class DatabaseService {
     await db.delete('categorias');
     await db.delete('ruta_del_dia');
     await db.delete('entregas');
+    await db.delete('copias_consulta');
     await db.delete('operaciones_pendientes');
   }
 }

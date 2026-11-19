@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import client from '../api/client'
+import client, { obtenerTodos } from '../api/client'
 
 const ROL_COLABORADOR = 2
 
@@ -159,9 +159,9 @@ export default function Preventistas() {
 
   function cargar() {
     setLoading(true)
-    client
-      .get(`/usuarios?rol_id=${ROL_COLABORADOR}`)
-      .then((res) => setPreventistas(res.data.data ?? []))
+    // Todas las páginas
+    obtenerTodos('/usuarios', { rol_id: ROL_COLABORADOR })
+      .then(setPreventistas)
       .catch(() => setError('No se pudo cargar la lista de preventistas.'))
       .finally(() => setLoading(false))
   }
@@ -259,17 +259,15 @@ export default function Preventistas() {
     setCuotaActual(null)
     try {
       const [resVentas, resCuotas] = await Promise.all([
-        client.get('/ventas', {
-          params: {
-            preventista_vendedor_id: p.id,
-            fecha_inicio: primerDiaDelMes(),
-            fecha_fin: hoyISO(),
-            per_page: 500,
-          },
+        // Todas las páginas (la API entrega máximo 100 por página)
+        obtenerTodos('/ventas', {
+          preventista_vendedor_id: p.id,
+          fecha_inicio: primerDiaDelMes(),
+          fecha_fin: hoyISO(),
         }),
         client.get('/cuotas', { params: { usuario_id: p.id } }),
       ])
-      setHistorialVentas(resVentas.data.data ?? [])
+      setHistorialVentas(resVentas)
 
       const hoy = hoyISO()
       const cuotaVigente = (resCuotas.data.data ?? []).find(

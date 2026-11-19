@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/database_service.dart';
+import '../widgets/aviso_datos_guardados.dart';
 import 'detalle_pedido_screen.dart';
 
 class DashboardAdminScreen extends StatefulWidget {
@@ -21,27 +23,63 @@ class _DashboardAdminScreenState extends State<DashboardAdminScreen> {
   Map<String, dynamic>? _data;
   bool _isLoading = true;
 
+  // Mostrando la copia guardada (sin conexión): de qué hora es y por qué
+  bool _usandoCopia = false;
+  DateTime? _fechaCopia;
+  bool _sinConexion = true;
+
   @override
   void initState() {
     super.initState();
     _cargarDashboard();
   }
 
+  int? get _usuarioId => int.tryParse(
+    '${Provider.of<AuthProvider>(context, listen: false).usuario?['id']}',
+  );
+
   Future<void> _cargarDashboard() async {
     setState(() => _isLoading = true);
+    final usuarioId = _usuarioId;
+    var sinConexion = true;
     try {
-      final result = await _api.get('dashboard-admin');
+      final result = await _api
+          .get('dashboard-admin')
+          .timeout(const Duration(seconds: 15));
       if (result['statusCode'] == 200) {
+        await DatabaseService.guardarCopia(
+          'dashboard_admin',
+          usuarioId,
+          result['data'],
+        );
+        if (!mounted) return;
         setState(() {
           _data = result['data'];
+          _usandoCopia = false;
           _isLoading = false;
         });
-      } else {
-        setState(() => _isLoading = false);
+        return;
       }
+      sinConexion = false; // la API respondió, pero con error
     } catch (e) {
-      setState(() => _isLoading = false);
+      // Sin conexión
     }
+
+    // Se muestra la última consulta guardada en el celular
+    final copia = await DatabaseService.obtenerCopia(
+      'dashboard_admin',
+      usuarioId,
+    );
+    if (!mounted) return;
+    setState(() {
+      if (copia != null) {
+        _data = Map<String, dynamic>.from(copia['datos'] as Map);
+        _fechaCopia = copia['fecha'] as DateTime?;
+        _usandoCopia = true;
+        _sinConexion = sinConexion;
+      }
+      _isLoading = false;
+    });
   }
 
   @override
@@ -125,6 +163,14 @@ class _DashboardAdminScreenState extends State<DashboardAdminScreen> {
               ),
             ),
             const SizedBox(height: 20),
+
+            // ── Sin conexión: datos guardados y de qué hora son ──
+            if (_usandoCopia)
+              AvisoDatosGuardados(
+                fecha: _fechaCopia,
+                sinConexion: _sinConexion,
+                margin: const EdgeInsets.only(bottom: 12),
+              ),
 
             // ── Alerta anti-fraude (solo si hay) ──
             if (alertasFraude > 0) ...[

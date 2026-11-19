@@ -24,6 +24,11 @@ client.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      // Había una sesión abierta y la API ya no la acepta (p. ej. se bloqueó
+      // al usuario): se avisa en la pantalla de inicio de sesión
+      if (localStorage.getItem('pt_token')) {
+        sessionStorage.setItem('pt_aviso_sesion', '1')
+      }
       localStorage.removeItem('pt_token')
       window.location.href = '/login'
     }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import client from '../api/client'
+import client, { obtenerTodos } from '../api/client'
 
 const STORAGE_URL = 'http://preventrack.local/storage/'
 
@@ -27,18 +27,17 @@ export default function Productos() {
 
   function cargar() {
     setLoading(true)
-    client
-      .get('/productos')
-      .then((res) => setProductos(res.data.data ?? []))
+    // Todas las páginas
+    obtenerTodos('/productos')
+      .then(setProductos)
       .catch(() => setError('No se pudo cargar la lista de productos.'))
       .finally(() => setLoading(false))
   }
 
   useEffect(() => {
     cargar()
-    client
-      .get('/categorias')
-      .then((res) => setCategorias(res.data.data ?? []))
+    obtenerTodos('/categorias')
+      .then(setCategorias)
       .catch(() => {})
   }, [])
 

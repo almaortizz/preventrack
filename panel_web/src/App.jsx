@@ -4,7 +4,6 @@ import ProtectedRoute from './components/ProtectedRoute'
 import DashboardLayout from './layouts/DashboardLayout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-import Placeholder from './pages/Placeholder'
 import Clientes from './pages/Clientes'
 import Categorias from './pages/Categorias'
 import Productos from './pages/Productos'
@@ -49,11 +48,6 @@ export default function App() {
          
           <Route path="visitas" element={<Visitas />} />
           <Route path="administradores" element={<Administradores />} />
-          <Route
-            path="reportes"
-            element={<Placeholder title="Reportes" />}
-
-          />
         </Route>
       </Routes>
     </AuthProvider>

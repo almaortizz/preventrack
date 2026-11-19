@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import client from '../api/client'
+import client, { obtenerTodos } from '../api/client'
 import Distancia from '../components/Distancia'
+import Paginacion from '../components/Paginacion'
 
 const ROL_COLABORADOR = 2
 
@@ -26,25 +27,36 @@ export default function Visitas() {
   const [filtroFecha, setFiltroFecha] = useState('')
   const [filtroResultado, setFiltroResultado] = useState('')
 
+  // Paginación (la API entrega 20 por página)
+  const [pagina, setPagina] = useState(1)
+  const [meta, setMeta] = useState(null)
+
   function cargar() {
     setLoading(true)
-    const params = {}
+    const params = { page: pagina }
     if (filtroPreventista) params.usuario_id = filtroPreventista
     if (filtroFecha) params.fecha = filtroFecha
     if (filtroResultado) params.resultado = filtroResultado
 
     client
       .get('/visitas', { params })
-      .then((res) => setVisitas(res.data.data ?? []))
+      .then((res) => {
+        // Si se borró lo último de la página, se pasa a la anterior
+        if (pagina > 1 && res.data.last_page && pagina > res.data.last_page) {
+          setPagina(res.data.last_page)
+          return
+        }
+        setVisitas(res.data.data ?? [])
+        setMeta(res.data)
+      })
       .catch(() => setError('No se pudo cargar la lista de visitas.'))
       .finally(() => setLoading(false))
   }
 
   function cargarPreventistas() {
-    client.get('/usuarios').then((res) => {
-      const todos = res.data.data ?? []
-      setPreventistas(todos.filter((u) => u.rol_id === ROL_COLABORADOR))
-    })
+    obtenerTodos('/usuarios').then((todos) =>
+      setPreventistas(todos.filter((u) => u.rol_id === ROL_COLABORADOR)),
+    )
   }
 
   useEffect(() => {
@@ -54,12 +66,19 @@ export default function Visitas() {
   useEffect(() => {
     cargar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroPreventista, filtroFecha, filtroResultado])
+  }, [filtroPreventista, filtroFecha, filtroResultado, pagina])
+
+  // Al cambiar un filtro se regresa a la primera página
+  function cambiarFiltro(setter, valor) {
+    setter(valor)
+    setPagina(1)
+  }
 
   function limpiarFiltros() {
     setFiltroPreventista('')
     setFiltroFecha('')
     setFiltroResultado('')
+    setPagina(1)
   }
 
   async function eliminar(visita) {
@@ -84,7 +103,7 @@ export default function Visitas() {
           <label className="block text-xs font-medium text-neutral-600 mb-1">Preventista</label>
           <select
             value={filtroPreventista}
-            onChange={(e) => setFiltroPreventista(e.target.value)}
+            onChange={(e) => cambiarFiltro(setFiltroPreventista, e.target.value)}
             className="rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
           >
             <option value="">Todos</option>
@@ -101,7 +120,7 @@ export default function Visitas() {
           <input
             type="date"
             value={filtroFecha}
-            onChange={(e) => setFiltroFecha(e.target.value)}
+            onChange={(e) => cambiarFiltro(setFiltroFecha, e.target.value)}
             className="rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
           />
         </div>
@@ -110,7 +129,7 @@ export default function Visitas() {
           <label className="block text-xs font-medium text-neutral-600 mb-1">Resultado</label>
           <select
             value={filtroResultado}
-            onChange={(e) => setFiltroResultado(e.target.value)}
+            onChange={(e) => cambiarFiltro(setFiltroResultado, e.target.value)}
             className="rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
           >
             <option value="">Todos</option>
@@ -194,6 +213,8 @@ export default function Visitas() {
           </tbody>
         </table>
       </div>
+
+      <Paginacion meta={meta} onCambiar={setPagina} />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import client, { obtenerTodos } from '../api/client'
+import Paginacion from '../components/Paginacion'
 
 const ROL_COLABORADOR = 2
 
@@ -39,11 +40,23 @@ export default function Rutas() {
   const [clienteTemp, setClienteTemp] = useState('')
   const [domicilioTemp, setDomicilioTemp] = useState('')
 
+  // Paginación (la API entrega 20 por página)
+  const [pagina, setPagina] = useState(1)
+  const [meta, setMeta] = useState(null)
+
   function cargar() {
     setLoading(true)
     client
-      .get('/rutas')
-      .then((res) => setRutas(res.data.data ?? []))
+      .get('/rutas', { params: { page: pagina } })
+      .then((res) => {
+        // Si se borró lo último de la página, se pasa a la anterior
+        if (pagina > 1 && res.data.last_page && pagina > res.data.last_page) {
+          setPagina(res.data.last_page)
+          return
+        }
+        setRutas(res.data.data ?? [])
+        setMeta(res.data)
+      })
       .catch(() => setError('No se pudo cargar la lista de rutas.'))
       .finally(() => setLoading(false))
   }
@@ -53,18 +66,21 @@ export default function Rutas() {
     obtenerTodos('/clientes').then((todos) =>
       setClientes(todos.filter((c) => c.estado === 'activo')),
     )
-    client.get('/usuarios').then((res) => {
-      const todos = res.data.data ?? []
+    obtenerTodos('/usuarios').then((todos) =>
       setPreventistas(
         todos.filter((u) => u.rol_id === ROL_COLABORADOR && u.estado === 'activo'),
-      )
-    })
+      ),
+    )
   }
 
   useEffect(() => {
-    cargar()
     cargarCatalogos()
   }, [])
+
+  useEffect(() => {
+    cargar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagina])
 
   useEffect(() => {
     if (!usuarioId || tipoRuta !== 'entrega') {
@@ -72,15 +88,12 @@ export default function Rutas() {
       return
     }
     setCargandoPedidos(true)
-    client
-      .get('/ventas', {
-        params: {
-          preventista_entrega_id: usuarioId,
-          estado: 'en_ruta',
-          per_page: 100,
-        },
-      })
-      .then((res) => setPedidosDisponibles(res.data.data ?? []))
+    // Todas las páginas
+    obtenerTodos('/ventas', {
+      preventista_entrega_id: usuarioId,
+      estado: 'en_ruta',
+    })
+      .then(setPedidosDisponibles)
       .catch(() => setPedidosDisponibles([]))
       .finally(() => setCargandoPedidos(false))
   }, [usuarioId, tipoRuta])
@@ -376,6 +389,8 @@ export default function Rutas() {
           </tbody>
         </table>
       </div>
+
+      <Paginacion meta={meta} onCambiar={setPagina} />
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">

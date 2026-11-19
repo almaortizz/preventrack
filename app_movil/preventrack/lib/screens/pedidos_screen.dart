@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../config/app_theme.dart';
+import '../providers/auth_provider.dart';
+import '../widgets/aviso_datos_guardados.dart';
 import '../widgets/aviso_jornada.dart';
 import '../services/api_service.dart';
 import 'detalle_pedido_screen.dart';
@@ -23,7 +26,14 @@ class _PedidosScreenState extends State<PedidosScreen> {
   List<dynamic> _pedidos = [];
   bool _isLoading = true;
   String _filtroActual = 'Todos';
-  bool _modoOffline = false;
+
+  // Mostrando la copia guardada (sin conexión): de qué hora es y por qué
+  bool _usandoCopia = false;
+  DateTime? _fechaCopia;
+  bool _sinConexion = true;
+
+  // Pedidos levantados sin conexión que aún no se suben
+  List<Map<String, dynamic>> _enCola = [];
 
   final List<String> _filtros = [
     'Todos',
@@ -39,32 +49,69 @@ class _PedidosScreenState extends State<PedidosScreen> {
     _cargarPedidos();
   }
 
+  int? get _usuarioId => int.tryParse(
+    '${Provider.of<AuthProvider>(context, listen: false).usuario?['id']}',
+  );
+
+  // Copia guardada por separado: la lista general y el historial de cada cliente
+  String get _claveCopia => widget.clienteId != null
+      ? 'pedidos_cliente_${widget.clienteId}'
+      : 'pedidos';
+
   Future<void> _cargarPedidos() async {
     setState(() => _isLoading = true);
+    final usuarioId = _usuarioId;
+
+    // Los pedidos por subir solo se muestran en la lista general
+    if (widget.clienteId == null) {
+      final enCola = await DatabaseService.obtenerPedidosEnCola();
+      if (mounted) setState(() => _enCola = enCola);
+    }
+
+    var sinConexion = true;
     try {
       // Todas las páginas (la API las entrega de 100 en 100)
-      final result = await _api.obtenerTodos(
-        widget.clienteId != null
-            ? 'ventas?cliente_id=${widget.clienteId}'
-            : 'ventas',
-      );
+      final result = await _api
+          .obtenerTodos(
+            widget.clienteId != null
+                ? 'ventas?cliente_id=${widget.clienteId}'
+                : 'ventas',
+          )
+          .timeout(const Duration(seconds: 30));
       if (result['statusCode'] == 200) {
         final data = result['data'];
+        final pedidos = data is List ? data : (data['data'] ?? []);
+        await DatabaseService.guardarCopia(_claveCopia, usuarioId, pedidos);
+        if (!mounted) return;
         setState(() {
-          _pedidos = data is List ? data : (data['data'] ?? []);
-          _modoOffline = false;
+          _pedidos = pedidos;
+          _usandoCopia = false;
           _isLoading = false;
         });
         return;
       }
+      sinConexion = false; // la API respondió, pero con error
     } catch (e) {
       // Sin conexión
     }
+
+    // Se muestra la última lista guardada en el celular
+    final copia = await DatabaseService.obtenerCopia(_claveCopia, usuarioId);
+    if (!mounted) return;
     setState(() {
-      _modoOffline = true;
+      _pedidos = copia != null
+          ? List<dynamic>.from(copia['datos'] as List)
+          : [];
+      _fechaCopia = copia?['fecha'] as DateTime?;
+      _usandoCopia = true;
+      _sinConexion = sinConexion;
       _isLoading = false;
     });
   }
+
+  // Los pedidos por subir se ven en "Todos" y en "Pendientes"
+  List<Map<String, dynamic>> get _enColaVisibles =>
+      _filtroActual == 'Todos' || _filtroActual == 'Pendientes' ? _enCola : [];
 
   List<dynamic> get _pedidosFiltrados {
     if (_filtroActual == 'Todos') return _pedidos;
@@ -188,6 +235,8 @@ class _PedidosScreenState extends State<PedidosScreen> {
   @override
   Widget build(BuildContext context) {
     final pedidosFiltrados = _pedidosFiltrados;
+    final enCola = _enColaVisibles;
+    final total = enCola.length + pedidosFiltrados.length;
 
     return Stack(
       children: [
@@ -210,6 +259,14 @@ class _PedidosScreenState extends State<PedidosScreen> {
               color: AppColors.cardBorder.withValues(alpha: 0.5),
             ),
 
+            // Sin conexión: lista guardada y de qué hora es
+            if (_usandoCopia && !_isLoading)
+              AvisoDatosGuardados(
+                fecha: _fechaCopia,
+                sinConexion: _sinConexion,
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              ),
+
             // Lista
             Expanded(
               child: _isLoading
@@ -218,7 +275,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
                         color: AppColors.primary,
                       ),
                     )
-                  : pedidosFiltrados.isEmpty
+                  : total == 0
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -247,9 +304,13 @@ class _PedidosScreenState extends State<PedidosScreen> {
                       color: AppColors.primary,
                       child: ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-                        itemCount: pedidosFiltrados.length,
-                        itemBuilder: (context, index) =>
-                            _buildPedidoCard(pedidosFiltrados[index]),
+                        // Primero los que faltan por subir, luego los de la API
+                        itemCount: total,
+                        itemBuilder: (context, index) => index < enCola.length
+                            ? _buildPedidoEnCola(enCola[index])
+                            : _buildPedidoCard(
+                                pedidosFiltrados[index - enCola.length],
+                              ),
                       ),
                     ),
             ),
@@ -299,6 +360,119 @@ class _PedidosScreenState extends State<PedidosScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // Pedido levantado sin conexión que todavía no llega a la oficina
+  Widget _buildPedidoEnCola(Map<String, dynamic> pedido) {
+    final folio = pedido['numero_orden']?.toString() ?? '';
+    final cliente = pedido['cliente_nombre_local']?.toString() ?? 'Cliente';
+    final total = double.tryParse(pedido['total_local']?.toString() ?? '') ?? 0;
+
+    String fechaStr = '';
+    final fecha = DateTime.tryParse(
+      pedido['fecha_fin_creacion']?.toString() ?? '',
+    );
+    if (fecha != null) {
+      fechaStr = DateFormat("d MMM, yyyy HH:mm", 'es').format(fecha.toLocal());
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'ORDEN #$folio',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary.withValues(alpha: 0.5),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.warning.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.cloud_upload_outlined,
+                      size: 13,
+                      color: AppColors.warning,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'Por enviar',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.warning,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            cliente,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                fechaStr.isNotEmpty ? fechaStr : 'Sin fecha',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                '\$${total.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Se subirá solo cuando haya conexión',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.textPrimary.withValues(alpha: 0.45),
+            ),
+          ),
+        ],
       ),
     );
   }

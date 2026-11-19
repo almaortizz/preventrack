@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import client, { obtenerTodos } from '../api/client'
 import Distancia from '../components/Distancia'
+import Paginacion from '../components/Paginacion'
 
 const ROL_COLABORADOR = 2
 
@@ -50,6 +51,10 @@ export default function Ventas() {
   const [viendoHistorial, setViendoHistorial] = useState(false)
   const [exportando, setExportando] = useState(false)
 
+  // Paginación (la API entrega 20 por página)
+  const [pagina, setPagina] = useState(1)
+  const [meta, setMeta] = useState(null)
+
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [items, setItems] = useState([{ producto_id: '', cantidad: 1 }])
@@ -68,14 +73,17 @@ export default function Ventas() {
 
   function cargar() {
     setLoading(true)
-    const params = {}
+    const params = { page: pagina }
     if (!viendoHistorial) {
       if (fechaInicio) params.fecha_inicio = fechaInicio
       if (fechaFin) params.fecha_fin = fechaFin
     }
     client
       .get('/ventas', { params })
-      .then((res) => setVentas(res.data.data ?? []))
+      .then((res) => {
+        setVentas(res.data.data ?? [])
+        setMeta(res.data)
+      })
       .catch(() => setError('No se pudo cargar la lista de pedidos.'))
       .finally(() => setLoading(false))
   }
@@ -86,12 +94,11 @@ export default function Ventas() {
       setClientes(todos.filter((c) => c.estado === 'activo')),
     )
     obtenerTodos('/productos').then(setProductos)
-    client.get('/usuarios').then((res) => {
-      const todos = res.data.data ?? []
+    obtenerTodos('/usuarios').then((todos) =>
       setPreventistas(
         todos.filter((u) => u.rol_id === ROL_COLABORADOR && u.estado === 'activo'),
-      )
-    })
+      ),
+    )
   }
 
   useEffect(() => {
@@ -101,16 +108,29 @@ export default function Ventas() {
   useEffect(() => {
     cargar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fechaInicio, fechaFin, viendoHistorial])
+  }, [fechaInicio, fechaFin, viendoHistorial, pagina])
+
+  // Al cambiar el filtro se regresa a la primera página
+  function cambiarFechaInicio(valor) {
+    setFechaInicio(valor)
+    setPagina(1)
+  }
+
+  function cambiarFechaFin(valor) {
+    setFechaFin(valor)
+    setPagina(1)
+  }
 
   function verHistorialCompleto() {
     setViendoHistorial(true)
+    setPagina(1)
   }
 
   function volverAlMesActual() {
     setFechaInicio(primerDiaDelMes())
     setFechaFin(hoyISO())
     setViendoHistorial(false)
+    setPagina(1)
   }
 
   async function exportarExcel() {
@@ -359,7 +379,7 @@ export default function Ventas() {
               <input
                 type="date"
                 value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
+                onChange={(e) => cambiarFechaInicio(e.target.value)}
                 className="rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
               />
             </div>
@@ -368,7 +388,7 @@ export default function Ventas() {
               <input
                 type="date"
                 value={fechaFin}
-                onChange={(e) => setFechaFin(e.target.value)}
+                onChange={(e) => cambiarFechaFin(e.target.value)}
                 className="rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary"
               />
             </div>
@@ -517,6 +537,8 @@ export default function Ventas() {
           </tbody>
         </table>
       </div>
+
+      <Paginacion meta={meta} onCambiar={setPagina} />
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">

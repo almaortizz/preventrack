@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import client from '../api/client'
+import client, { obtenerTodos } from '../api/client'
 
 const emptyForm = { nombre: '', descripcion: '', estado: 'activo' }
 
@@ -14,9 +14,9 @@ export default function Categorias() {
 
   function cargar() {
     setLoading(true)
-    client
-      .get('/categorias')
-      .then((res) => setCategorias(res.data.data ?? []))
+    // Todas las páginas
+    obtenerTodos('/categorias')
+      .then(setCategorias)
       .catch(() => setError('No se pudo cargar la lista de categorías.'))
       .finally(() => setLoading(false))
   }

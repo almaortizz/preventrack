@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import client from '../api/client'
+import client, { obtenerTodos } from '../api/client'
 
 const ROL_ADMIN = 1
 
@@ -35,9 +35,9 @@ export default function Administradores() {
 
   function cargar() {
     setLoading(true)
-    client
-      .get(`/usuarios?rol_id=${ROL_ADMIN}`)
-      .then((res) => setAdmins(res.data.data ?? []))
+    // Todas las páginas
+    obtenerTodos('/usuarios', { rol_id: ROL_ADMIN })
+      .then(setAdmins)
       .catch(() => setError('No se pudo cargar la lista de administradores.'))
       .finally(() => setLoading(false))
   }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Footer from '../components/Footer'
@@ -8,6 +8,21 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Aviso cuando la sesión se cerró sola (lo deja api/client.js); se muestra una vez
+  const [avisoSesion] = useState(() => {
+    try {
+      return sessionStorage.getItem('pt_aviso_sesion') === '1'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem('pt_aviso_sesion')
+    } catch {
+      // sin almacenamiento: no hay aviso que borrar
+    }
+  }, [])
   const { login } = useAuth()
   const navigate = useNavigate()
 
@@ -40,6 +55,12 @@ export default function Login() {
         <p className="text-neutral-400 text-center mb-6">
           Panel administrativo
         </p>
+
+        {avisoSesion && !error && (
+          <p className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+            Tu sesión terminó. Inicia sesión de nuevo.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
        <div>
