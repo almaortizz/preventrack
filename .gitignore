@@ -1,0 +1,3 @@
+# Respaldos de la base de datos (pueden tener datos personales): no se suben.
+# La base se crea con las migraciones de la API (php artisan migrate).
+*.sql
