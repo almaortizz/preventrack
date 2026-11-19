@@ -21,11 +21,6 @@ class Domicilio extends Model
         return $this->hasMany(Venta::class, 'domicilio_id');
     }
 
-    public function cotizaciones()
-    {
-        return $this->hasMany(Cotizacion::class, 'domicilio_id');
-    }
-
     public function visitas()
     {
         return $this->hasMany(Visita::class, 'domicilio_id');

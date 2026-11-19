@@ -56,7 +56,7 @@ class VentaController extends Controller
             $query->whereDate('fecha_hora', '<=', $request->fecha_fin);
         }
 
-               $porPagina = $request->input('per_page', 20);
+        $porPagina = $this->porPagina($request);
 
         return response()->json(
             $query->orderByDesc('fecha_hora')->paginate($porPagina)
@@ -80,9 +80,31 @@ class VentaController extends Controller
             'productos.*.cantidad' => 'required|integer|min:1',
             'detalle_ruta_id' => 'nullable|integer',
             'precision' => 'nullable|numeric|min:0',
+            // Folio generado en el celular: serie del preventista + año + consecutivo
+            'numero_orden' => 'nullable|string|max:30',
+            // Ticket impreso en el celular antes de sincronizar
+            'impreso' => 'nullable|boolean',
         ]);
 
-        $venta = DB::transaction(function () use ($request, $datos) {
+        $folio = $datos['numero_orden'] ?? null;
+        if ($folio !== null) {
+            $this->validarFolio($folio, (int) $datos['preventista_vendedor_id'], $request);
+
+            $existente = Venta::where('numero_orden', $folio)->first();
+            if ($existente) {
+                // Reintento del mismo pedido (p. ej. la cola lo reenvió porque se
+                // perdió la respuesta): mismo folio, preventista e inicio de captura
+                if ($this->esMismoPedido($existente, $datos)) {
+                    return response()->json($existente->load('detalle.producto'), 200);
+                }
+
+                throw ValidationException::withMessages([
+                    'numero_orden' => ["El folio {$folio} ya está registrado en otro pedido."],
+                ]);
+            }
+        }
+
+        $venta = DB::transaction(function () use ($request, $datos, $folio) {
 
             $total = 0;
             $detalles = [];
@@ -104,8 +126,14 @@ class VentaController extends Controller
             $totalFinal = $total - $descuento;
             if ($totalFinal < 0) $totalFinal = 0;
 
+            $impreso = (bool) ($datos['impreso'] ?? false);
+
             $venta = Venta::create([
-                'numero_orden' => 'PED-' . strtoupper(uniqid()),
+                // Sin folio de la app (panel o versiones anteriores de la app)
+                // se genera como siempre, en otra serie que no choca
+                'numero_orden' => $folio ?? 'PED-' . strtoupper(uniqid()),
+                'impreso' => $impreso,
+                'fecha_impresion' => $impreso ? now() : null,
                 'domicilio_id' => $datos['domicilio_id'],
                 'preventista_vendedor_id' => $datos['preventista_vendedor_id'],
                 // Hora en que se terminó de levantar el pedido (si se hizo
@@ -185,16 +213,98 @@ class VentaController extends Controller
         $detalle->ruta->actualizarEstado();
     }
 
-    public function show(Venta $venta)
+    // Folio de la app: P{id del preventista}-{AA}-{consecutivo de 4 o más
+    // dígitos}, p. ej. P2-26-0153. Solo se acepta la serie del propio
+    // preventista que levanta el pedido.
+    private function validarFolio(string $folio, int $vendedorId, Request $request): void
     {
-        return response()->json(
-            $venta->load(['domicilio.cliente', 'vendedor', 'repartidor', 'detalle.producto'])
+        $valido = preg_match('/^P(\d+)-\d{2}-\d{4,}$/', $folio, $partes)
+            && (int) $partes[1] === $vendedorId
+            && (int) $request->user()->id === $vendedorId;
+
+        if (!$valido) {
+            throw ValidationException::withMessages([
+                'numero_orden' => ["El folio {$folio} no es válido."],
+            ]);
+        }
+    }
+
+    // Un folio repetido solo es reintento si también coinciden el preventista
+    // y el inicio de captura (al segundo); si no, es un conflicto
+    private function esMismoPedido(Venta $existente, array $datos): bool
+    {
+        if ((int) $existente->preventista_vendedor_id !== (int) $datos['preventista_vendedor_id']) {
+            return false;
+        }
+
+        $inicioNuevo = $datos['fecha_inicio_creacion'] ?? null;
+        if (!$existente->fecha_inicio_creacion || !$inicioNuevo) {
+            return false;
+        }
+
+        return $existente->fecha_inicio_creacion->format('Y-m-d H:i:s')
+            === Carbon::parse($inicioNuevo)->format('Y-m-d H:i:s');
+    }
+
+    // Último consecutivo de la serie del usuario en un año (por defecto el
+    // actual). La app lo usa para continuar su numeración aunque cambie de
+    // celular o reinstale la app. Se compara como número (10000 > 9999).
+    public function ultimoFolio(Request $request)
+    {
+        $usuarioId = $request->user()->id;
+        $anio = $request->filled('anio')
+            ? str_pad((string) ((int) $request->anio % 100), 2, '0', STR_PAD_LEFT)
+            : now()->format('y');
+        $prefijo = "P{$usuarioId}-{$anio}-";
+
+        $consecutivo = Venta::where('numero_orden', 'like', $prefijo . '%')
+            ->pluck('numero_orden')
+            ->map(fn ($folio) => (int) substr($folio, strlen($prefijo)))
+            ->max() ?? 0;
+
+        return response()->json([
+            'usuario_id' => $usuarioId,
+            'anio' => (int) $anio,
+            'consecutivo' => $consecutivo,
+        ]);
+    }
+
+    public function show(Request $request, Venta $venta)
+    {
+        // Un preventista solo ve los pedidos que levantó o que le toca entregar
+        $usuario = $request->user();
+        if ((int) $usuario->rol_id !== 1
+            && (int) $venta->preventista_vendedor_id !== (int) $usuario->id
+            && (int) $venta->preventista_entrega_id !== (int) $usuario->id) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
+        $venta->load(['domicilio.cliente', 'vendedor', 'repartidor', 'detalle.producto', 'registrosGps']);
+
+        // Distancia entre donde se levantó el pedido y el domicilio del cliente
+        // (las de entrega / no entregado vienen en registros_gps)
+        $datos = $venta->toArray();
+        $datos['distancia_registro_m'] = RegistroGps::distanciaMetros(
+            $venta->latitud_registro,
+            $venta->longitud_registro,
+            $venta->domicilio
         );
+        // El pedido no guarda la precisión; la tiene la visita ligada (pedidos
+        // levantados desde la ruta). Si no hay, queda null.
+        $datos['precision_registro_m'] = Visita::where('venta_id', $venta->id)->value('precision_m');
+
+        return response()->json($datos);
     }
 
     // Editar datos generales del pedido (solo antes de imprimir el ticket)
     public function update(Request $request, Venta $venta)
     {
+        if ($venta->estado !== 'pendiente') {
+            throw ValidationException::withMessages([
+                'venta' => ['Solo se puede editar un pedido pendiente.'],
+            ]);
+        }
+
         if ($venta->impreso) {
             throw ValidationException::withMessages([
                 'venta' => ['Este pedido ya no se puede modificar porque el ticket ya fue impreso.'],
@@ -336,16 +446,23 @@ class VentaController extends Controller
             'motivo_cancelacion' => 'nullable|string|max:255',
         ]);
 
-        if ($venta->estado === 'entregado') {
+        if (!in_array($venta->estado, ['pendiente', 'en_ruta'], true)) {
             throw ValidationException::withMessages([
-                'estado' => ['No se puede cancelar un pedido que ya fue entregado.'],
+                'estado' => ['Solo se puede cancelar un pedido pendiente o en ruta.'],
             ]);
         }
 
-        $venta->update([
-            'estado' => 'cancelado',
-            'motivo_cancelacion' => $datos['motivo_cancelacion'] ?? null,
-        ]);
+        DB::transaction(function () use ($venta, $datos) {
+            $venta->update([
+                'estado' => 'cancelado',
+                'motivo_cancelacion' => $datos['motivo_cancelacion'] ?? null,
+            ]);
+
+            // Si estaba en una ruta de entregas, su parada queda atendida
+            // (el panel la muestra como "Cancelado") para que la ruta pueda
+            // cerrarse
+            $this->actualizarParadaEntrega($venta, 'no_disponible');
+        });
 
         return response()->json($venta);
     }
@@ -359,12 +476,5 @@ class VentaController extends Controller
         ]);
 
         return response()->json($venta);
-    }
-
-    public function destroy(Venta $venta)
-    {
-        $venta->delete();
-
-        return response()->json(['message' => 'Pedido eliminado correctamente.']);
     }
 }

@@ -45,10 +45,6 @@ export default function App() {
 
           <Route path="ventas" element={<Ventas />} />
           <Route path="cuotas" element={<Cuotas />} />
-          <Route
-            path="cotizaciones"
-            element={<Placeholder title="Cotizaciones" />}
-          />
          <Route path="rutas" element={<Rutas />} />
          
           <Route path="visitas" element={<Visitas />} />

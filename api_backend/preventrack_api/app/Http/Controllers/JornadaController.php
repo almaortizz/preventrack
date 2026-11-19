@@ -23,12 +23,15 @@ class JornadaController extends Controller
             $query->whereDate('fecha', $request->fecha);
         }
 
-        return response()->json($query->orderByDesc('fecha')->paginate(20));
+        return response()->json($query->orderByDesc('fecha')->paginate($this->porPagina($request)));
     }
 
     // Jornada abierta del usuario que inició sesión (null si no tiene)
     public function actual(Request $request)
     {
+        // Primero se cierra la que ya excedió el límite de horas
+        Jornada::cerrarVencidasDe($request->user()->id);
+
         $jornada = Jornada::where('usuario_id', $request->user()->id)
             ->whereNull('hora_fin')
             ->latest('id')
@@ -44,13 +47,19 @@ class JornadaController extends Controller
     public function registrar(Request $request)
     {
         $datos = $request->validate([
-            'evento' => 'required|in:iniciar,iniciar_comida,finalizar_comida,finalizar',
+            'evento' => 'required|in:iniciar,iniciar_comida,finalizar_comida,finalizar,cierre_automatico',
             'latitud' => 'nullable|numeric|between:-90,90',
             'longitud' => 'nullable|numeric|between:-180,180',
             'fecha_hora_registro' => 'nullable|date',
+            // cierre_automatico: inicio de la jornada que la app cerró sin conexión
+            'hora_inicio_jornada' => 'nullable|string|max:40',
         ]);
 
         $usuarioId = $request->user()->id;
+
+        // Antes de cualquier evento se cierra la que ya excedió el límite: así
+        // se puede iniciar una nueva y no se registra comida en una vencida
+        Jornada::cerrarVencidasDe($usuarioId);
         $momento = $this->momentoRegistro($datos['fecha_hora_registro'] ?? null);
         $lat = $datos['latitud'] ?? null;
         $lng = $datos['longitud'] ?? null;
@@ -59,6 +68,19 @@ class JornadaController extends Controller
             ->whereNull('hora_fin')
             ->latest('id')
             ->first();
+
+        // La app cerró sin conexión una jornada que excedió el límite. Si la
+        // abierta es esa (misma hora de inicio), se cierra igual que en la API;
+        // si ya estaba cerrada o la abierta es otra más nueva, no se hace nada
+        // (sin duplicar ni dar error)
+        if ($datos['evento'] === 'cierre_automatico') {
+            if ($abierta && $abierta->tieneInicio($datos['hora_inicio_jornada'] ?? null)) {
+                $abierta->cerrarAutomaticamente();
+                return response()->json($abierta->fresh());
+            }
+
+            return response()->json(['message' => 'La jornada ya estaba cerrada.']);
+        }
 
         if ($datos['evento'] === 'iniciar') {
             if ($abierta) {
@@ -212,8 +234,14 @@ class JornadaController extends Controller
         return response()->json($jornada);
     }
 
-    public function show(Jornada $jornada)
+    public function show(Request $request, Jornada $jornada)
     {
+        // Un preventista solo ve sus propias jornadas
+        if ((int) $request->user()->rol_id !== 1
+            && (int) $jornada->usuario_id !== (int) $request->user()->id) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
         return response()->json($jornada->load('usuario'));
     }
 }

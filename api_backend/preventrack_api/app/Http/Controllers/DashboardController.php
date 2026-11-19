@@ -162,6 +162,10 @@ class DashboardController extends Controller
             ->whereDate('updated_at', $hoy)->count();
 
         // ── Preventistas activos (con jornada activa hoy) ──
+        // Antes se cierran las que excedieron el límite de horas
+        \App\Models\Jornada::whereNull('hora_fin')->get()
+            ->each(fn ($jornada) => $jornada->cerrarSiExcedeLimite());
+
         $jornadasActivas = \App\Models\Jornada::whereDate('fecha', $hoy)
             ->whereNotNull('hora_inicio')
             ->whereNull('hora_fin')

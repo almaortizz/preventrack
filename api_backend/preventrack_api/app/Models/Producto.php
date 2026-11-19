@@ -20,14 +20,4 @@ class Producto extends Model
     {
         return $this->hasMany(DetalleVenta::class, 'producto_id');
     }
-
-    public function detalleCotizaciones()
-    {
-        return $this->hasMany(DetalleCotizacion::class, 'producto_id');
-    }
-
-    public function devoluciones()
-    {
-        return $this->hasMany(Devolucion::class, 'producto_id');
-    }
 }

@@ -5,6 +5,7 @@ import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
 import 'api_service.dart';
+import 'database_service.dart';
 
 class PrintService {
   static String? _macConectada;
@@ -195,8 +196,8 @@ class PrintService {
     String clienteNombre = 'Cliente';
     final domicilio = venta['domicilio'];
     if (domicilio != null && domicilio['cliente'] != null) {
-      clienteNombre =
-          (domicilio['cliente']['nombre_negocio'] ?? 'Cliente').toString();
+      clienteNombre = (domicilio['cliente']['nombre_negocio'] ?? 'Cliente')
+          .toString();
     }
 
     final detalle = venta['detalle'] as List<dynamic>? ?? [];
@@ -365,7 +366,15 @@ class PrintService {
   /// Si falla, no afecta la impresión.
   static Future<void> _marcarImpreso(Map<String, dynamic> venta) async {
     final id = venta['id'];
-    if (id == null) return; // pedidos offline aún sin ID
+    if (id == null) {
+      // Pedido sin conexión (aún sin id): se marca en la cola por su folio
+      // y llega a la API ya impreso
+      final folio = venta['numero_orden']?.toString();
+      if (folio != null && folio.isNotEmpty) {
+        await DatabaseService.marcarPedidoEnColaComoImpreso(folio);
+      }
+      return;
+    }
     try {
       await ApiService().post('ventas/$id/marcar-impreso');
     } catch (_) {}

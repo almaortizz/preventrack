@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../config/app_theme.dart';
+import '../widgets/aviso_jornada.dart';
 import '../services/api_service.dart';
 import 'detalle_pedido_screen.dart';
 import 'catalogo_productos_screen.dart';
@@ -41,9 +42,10 @@ class _PedidosScreenState extends State<PedidosScreen> {
   Future<void> _cargarPedidos() async {
     setState(() => _isLoading = true);
     try {
-      final result = await _api.get(
+      // Todas las páginas (la API las entrega de 100 en 100)
+      final result = await _api.obtenerTodos(
         widget.clienteId != null
-            ? 'ventas?cliente_id=${widget.clienteId}&per_page=100'
+            ? 'ventas?cliente_id=${widget.clienteId}'
             : 'ventas',
       );
       if (result['statusCode'] == 200) {
@@ -89,11 +91,19 @@ class _PedidosScreenState extends State<PedidosScreen> {
   }
 
   void _mostrarSelectorCliente() async {
-    final result = await _api.get('clientes');
+    // Antes de elegir cliente: el pedido requiere la jornada iniciada
+    if (!await requiereJornadaActiva(context)) return;
+    if (!mounted) return;
+
+    // Todas las páginas
+    final result = await _api.obtenerTodos('clientes');
     if (result['statusCode'] != 200) return;
 
     final data = result['data'];
-    final clientes = data is List ? data : (data['data'] ?? []);
+    // Solo clientes activos: a los inactivos no se les levantan pedidos
+    final clientes = (data is List ? data : (data['data'] ?? []))
+        .where((c) => c['estado'] != 'inactivo')
+        .toList();
 
     if (!mounted) return;
 

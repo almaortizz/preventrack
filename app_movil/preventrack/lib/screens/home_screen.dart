@@ -11,6 +11,7 @@ import 'clientes_screen.dart';
 import 'pedidos_screen.dart';
 import 'entregas_screen.dart';
 import 'jornada_screen.dart';
+import 'monitoreo_screen.dart';
 import 'perfil_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -20,13 +21,29 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _reanudarUbicacionSiHayJornadaActiva();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Al volver a la app (desde segundo plano) se revisa la jornada: si
+  // cumplió el límite de horas se cierra y se detiene el envío de ubicación
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _reanudarUbicacionSiHayJornadaActiva();
+    }
   }
 
   // Si la persona cierra y vuelve a abrir la app mientras ya tenía una
@@ -226,6 +243,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
+              // Monitoreo del equipo solo para el administrador
+              if (admin)
+                ListTile(
+                  leading: const Icon(
+                    Icons.map_outlined,
+                    color: AppColors.primary,
+                  ),
+                  title: const Text('Monitoreo'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MonitoreoScreen(),
+                      ),
+                    );
+                  },
+                ),
               // Jornada laboral solo para colaboradores
               if (!admin)
                 ListTile(

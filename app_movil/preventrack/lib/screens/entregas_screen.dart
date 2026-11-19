@@ -49,9 +49,8 @@ class _EntregasScreenState extends State<EntregasScreen> {
     var entregas = <dynamic>[];
     var offline = false;
     try {
-      final result = await _api.get(
-        'ventas?estado=en_ruta$filtro&per_page=100',
-      );
+      // Todas las páginas (la API las entrega de 100 en 100)
+      final result = await _api.obtenerTodos('ventas?estado=en_ruta$filtro');
       if (result['statusCode'] == 200) {
         final data = result['data'];
         entregas = data is List ? data : (data['data'] ?? []);

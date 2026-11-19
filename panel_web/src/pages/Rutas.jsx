@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import client from '../api/client'
+import client, { obtenerTodos } from '../api/client'
 
 const ROL_COLABORADOR = 2
 
@@ -49,7 +49,10 @@ export default function Rutas() {
   }
 
   function cargarCatalogos() {
-    client.get('/clientes').then((res) => setClientes(res.data.data ?? []))
+    // Para rutas nuevas solo clientes activos (todas las páginas)
+    obtenerTodos('/clientes').then((todos) =>
+      setClientes(todos.filter((c) => c.estado === 'activo')),
+    )
     client.get('/usuarios').then((res) => {
       const todos = res.data.data ?? []
       setPreventistas(
@@ -187,6 +190,10 @@ export default function Rutas() {
   // Etiqueta y colores del estado de una parada. En las de entrega,
   // "visitada" es Entregado y "no_disponible" es No entregado.
   function estadoParada(d) {
+    // Pedido cancelado: su parada se cierra para que la ruta pueda terminar
+    if (d.venta?.estado === 'cancelado') {
+      return { texto: 'Cancelado', clase: 'bg-neutral-200 text-neutral-600' }
+    }
     if (d.estado === 'visitada') {
       return { texto: d.venta_id ? 'Entregado' : 'Visitada', clase: 'bg-green-100 text-green-700' }
     }

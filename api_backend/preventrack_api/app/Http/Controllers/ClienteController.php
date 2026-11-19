@@ -19,7 +19,7 @@ class ClienteController extends Controller
             $query->where('zona', 'like', '%' . $request->zona . '%');
         }
 
-        return response()->json($query->paginate(20));
+        return response()->json($query->paginate($this->porPagina($request)));
     }
 
     public function store(Request $request)
@@ -73,12 +73,5 @@ class ClienteController extends Controller
         $cliente->update($datos);
 
         return response()->json($cliente);
-    }
-
-    public function destroy(Cliente $cliente)
-    {
-        $cliente->delete();
-
-        return response()->json(['message' => 'Cliente eliminado correctamente.']);
     }
 }

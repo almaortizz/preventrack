@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../config/app_theme.dart';
+import '../widgets/aviso_jornada.dart';
 import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/jornada_service.dart';
@@ -418,6 +419,8 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
   // ═══════════════════════════════════════════
 
   Future<void> _registrarEntrega(int ventaId, BuildContext sheetContext) async {
+    if (!await requiereJornadaActiva(context)) return;
+    if (!mounted) return;
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -563,6 +566,8 @@ class _MapaEntregasScreenState extends State<MapaEntregasScreen> {
     int ventaId,
     BuildContext sheetContext,
   ) async {
+    if (!await requiereJornadaActiva(context)) return;
+    if (!mounted) return;
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

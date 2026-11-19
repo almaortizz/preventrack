@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import client from '../api/client'
+import client, { obtenerTodos } from '../api/client'
+import Distancia from '../components/Distancia'
 
 const ROL_COLABORADOR = 2
 
@@ -80,8 +81,11 @@ export default function Ventas() {
   }
 
   function cargarCatalogos() {
-    client.get('/clientes').then((res) => setClientes(res.data.data ?? []))
-    client.get('/productos').then((res) => setProductos(res.data.data ?? []))
+    // Para pedidos nuevos solo clientes activos (todas las páginas)
+    obtenerTodos('/clientes').then((todos) =>
+      setClientes(todos.filter((c) => c.estado === 'activo')),
+    )
+    obtenerTodos('/productos').then(setProductos)
     client.get('/usuarios').then((res) => {
       const todos = res.data.data ?? []
       setPreventistas(
@@ -268,18 +272,16 @@ export default function Ventas() {
     }
   }
 
-  async function eliminar(venta) {
-    if (!confirm(`¿Estás seguro de eliminar el pedido ${venta.numero_orden}? Esta acción no se puede deshacer.`)) return
-    try {
-      await client.delete(`/ventas/${venta.id}`)
-      cargar()
-    } catch {
-      alert('No se pudo eliminar el pedido.')
-    }
-  }
 
-  function abrirDetalle(venta) {
+  // Se muestra de inmediato y se completa con el detalle (distancias GPS)
+  async function abrirDetalle(venta) {
     setDetalleAbierto(venta)
+    try {
+      const res = await client.get(`/ventas/${venta.id}`)
+      setDetalleAbierto(res.data)
+    } catch {
+      // se queda con los datos de la lista
+    }
   }
 
   function cerrarDetalle() {
@@ -502,12 +504,6 @@ export default function Ventas() {
                         </button>
                       </>
                     )}
-                    <button
-                      onClick={() => eliminar(v)}
-                      className="text-neutral-500 font-medium hover:underline"
-                    >
-                      Eliminar
-                    </button>
                   </td>
                 </tr>
               ))
@@ -802,6 +798,24 @@ export default function Ventas() {
                 ) : (
                   <p className="text-neutral-400 italic">Sin coordenadas registradas</p>
                 )}
+              </div>
+
+              <div className="border-t border-neutral-100 pt-3">
+                <p className="text-xs text-neutral-400 mb-1">Distancia al domicilio del cliente</p>
+                <p className="text-neutral-600">
+                  Al levantar el pedido:{' '}
+                  <Distancia
+                    metros={detalleAbierto.distancia_registro_m}
+                    precision={detalleAbierto.precision_registro_m}
+                  />
+                </p>
+                {(detalleAbierto.registros_gps || []).map((r) => (
+                  <p key={r.id} className="text-neutral-600">
+                    {r.tipo === 'entrega' ? 'Al entregar' : r.tipo === 'no_entregado' ? 'Al reportar no entregado' : r.tipo}
+                    {' '}({new Date(r.created_at).toLocaleString('es-MX')}):{' '}
+                    <Distancia metros={r.distancia_m} precision={r.precision_m} />
+                  </p>
+                ))}
               </div>
 
               <div className="border-t border-neutral-100 pt-3">

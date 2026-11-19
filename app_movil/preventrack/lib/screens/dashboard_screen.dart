@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../config/app_theme.dart';
+import '../widgets/aviso_jornada.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/database_service.dart';
@@ -24,6 +25,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
   int _pendientesSync = 0;
   String? _syncMensaje;
+  // Copias de pedidos rechazados por folio, para reenviarlos
+  List<Map<String, dynamic>> _rechazados = [];
 
   @override
   void initState() {
@@ -47,8 +50,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _cargarRechazados() async {
+    final lista = await SyncService.obtenerPedidosRechazados();
+    if (mounted) setState(() => _rechazados = lista);
+  }
+
   Future<void> _sincronizarPendientes() async {
     if (!DatabaseService.isAvailable) return;
+    // Pudieron rechazarse al sincronizar desde otra pantalla
+    await _cargarRechazados();
 
     final pendientes = await DatabaseService.contarOperacionesPendientes();
     if (!mounted) return;
@@ -70,6 +80,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     setState(() => _pendientesSync = restantes);
     await mostrarRechazosSincronizacion(context);
+    await _cargarRechazados();
     if (!mounted) return;
 
     if (resultado['subidas'] > 0) {
@@ -92,6 +103,142 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // Lista de pedidos rechazados por folio con opción de reenviarlos
+  void _mostrarRechazados() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Pedidos rechazados por folio',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Al reenviarlo recibe un folio nuevo. Entrega al cliente el '
+                'ticket con ese folio.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textPrimary.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (var i = 0; i < _rechazados.length; i++)
+                _buildRechazado(i, sheetContext),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRechazado(int indice, BuildContext sheetContext) {
+    final copia = _rechazados[indice];
+    final pedido = Map<String, dynamic>.from(copia['pedido'] as Map);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Folio rechazado: ${pedido['numero_orden']}',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          Text(
+            SyncService.describirPedido(pedido),
+            style: const TextStyle(fontSize: 13),
+          ),
+          Text(
+            copia['motivo']?.toString() ?? '',
+            style: const TextStyle(fontSize: 12, color: AppColors.error),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () async {
+                  final confirmar = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Descartar pedido'),
+                      content: const Text(
+                        'Se borrará la copia del celular. Hazlo solo si la '
+                        'oficina ya registró este pedido.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancelar'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Descartar'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmar != true) return;
+                  await SyncService.descartarPedidoRechazado(indice);
+                  if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  await _cargarRechazados();
+                },
+                child: const Text('Descartar'),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: () async {
+                  if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  final folio = await SyncService.reenviarPedidoRechazado(
+                    indice,
+                  );
+                  if (!mounted) return;
+                  await _cargarRechazados();
+                  final restantes =
+                      await DatabaseService.contarOperacionesPendientes();
+                  if (!mounted) return;
+                  setState(() => _pendientesSync = restantes);
+                  if (folio == null) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Se reenviará como $folio. Entrega al cliente el '
+                        'ticket con el folio nuevo.',
+                      ),
+                      backgroundColor: AppColors.success,
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                  await mostrarRechazosSincronizacion(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Reenviar con folio nuevo'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   // Al deslizar hacia abajo: subir lo pendiente y recargar
   Future<void> _refrescar() async {
     await _sincronizarPendientes();
@@ -101,11 +248,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _operaciones(int n) => n == 1 ? '1 operación' : '$n operaciones';
 
   void _mostrarSelectorCliente() async {
-    final result = await _api.get('clientes');
+    // Antes de elegir cliente: el pedido requiere la jornada iniciada
+    if (!await requiereJornadaActiva(context)) return;
+    if (!mounted) return;
+
+    // Todas las páginas
+    final result = await _api.obtenerTodos('clientes');
     if (result['statusCode'] != 200) return;
 
     final data = result['data'];
-    final clientes = data is List ? data : (data['data'] ?? []);
+    // Solo clientes activos: a los inactivos no se les levantan pedidos
+    final clientes = (data is List ? data : (data['data'] ?? []))
+        .where((c) => c['estado'] != 'inactivo')
+        .toList();
 
     if (!mounted) return;
 
@@ -274,6 +429,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                if (_rechazados.isNotEmpty)
+                  GestureDetector(
+                    onTap: _mostrarRechazados,
+                    child: Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.error.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            size: 18,
+                            color: AppColors.error,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${_rechazados.length} pedido${_rechazados.length == 1 ? '' : 's'} '
+                              'rechazado${_rechazados.length == 1 ? '' : 's'} por folio — '
+                              'Toca para revisarlo${_rechazados.length == 1 ? '' : 's'}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right,
+                            size: 18,
+                            color: AppColors.error,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 if (_pendientesSync > 0 && _syncMensaje == null)

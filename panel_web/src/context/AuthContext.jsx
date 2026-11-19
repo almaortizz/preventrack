@@ -3,10 +3,6 @@ import client from '../api/client'
 
 const AuthContext = createContext(null)
 
-// Rol de preventista (colaborador): solo usa la app móvil, no el panel.
-const ROL_COLABORADOR = 2
-const esColaborador = (u) => Number(u?.rol_id) === ROL_COLABORADOR
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -20,7 +16,8 @@ export function AuthProvider({ children }) {
     client
       .get('/me')
       .then((res) => {
-        if (esColaborador(res.data)) {
+        // Sesión guardada de alguien que no es administrador: no se usa
+        if (Number(res.data?.rol_id) !== 1) {
           localStorage.removeItem('pt_token')
           return
         }
@@ -33,19 +30,19 @@ export function AuthProvider({ children }) {
   async function login(usuario, password) {
     const res = await client.post('/login', { usuario, password })
 
-    if (esColaborador(res.data.usuario)) {
-      // Se cierra la sesión que se acaba de crear en el servidor y se rechaza el acceso.
+    // El panel es solo para administradores: se cierra la sesión recién
+    // creada y no se guarda el token
+    if (Number(res.data.usuario?.rol_id) !== 1) {
       try {
         await client.post('/logout', null, {
           headers: { Authorization: `Bearer ${res.data.token}` },
         })
       } catch {
-        // si falla, igual no se guarda el token en el navegador
+        // si falla, el token simplemente no se usa
       }
-      const error = new Error('Acceso denegado')
-      error.response = {
-        data: { message: 'Este usuario es preventista. Solo puede usar la app móvil.' },
-      }
+      const mensaje = 'Este panel es solo para administradores.'
+      const error = new Error(mensaje)
+      error.response = { data: { message: mensaje } }
       throw error
     }
 

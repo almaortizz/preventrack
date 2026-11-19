@@ -284,7 +284,8 @@ class DatabaseService {
     });
   }
 
-  static Future<List<Map<String, dynamic>>> obtenerOperacionesPendientes() async {
+  static Future<List<Map<String, dynamic>>>
+  obtenerOperacionesPendientes() async {
     if (!isAvailable) return [];
     final db = await database;
     return await db.query('operaciones_pendientes', orderBy: 'id ASC');
@@ -294,6 +295,35 @@ class DatabaseService {
     if (!isAvailable) return;
     final db = await database;
     await db.delete('operaciones_pendientes', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Marca como impreso el pedido de la cola con ese folio (ticket impreso
+  /// sin conexión). Regresa false si ya no está en la cola.
+  static Future<bool> marcarPedidoEnColaComoImpreso(String folio) async {
+    if (!isAvailable) return false;
+    final db = await database;
+    final operaciones = await db.query(
+      'operaciones_pendientes',
+      where: 'tipo = ?',
+      whereArgs: ['crear_pedido'],
+    );
+
+    for (final op in operaciones) {
+      final bodyStr = op['body'] as String?;
+      if (bodyStr == null) continue;
+      final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+      if (body['numero_orden'] != folio) continue;
+
+      body['impreso'] = true;
+      await db.update(
+        'operaciones_pendientes',
+        {'body': jsonEncode(body)},
+        where: 'id = ?',
+        whereArgs: [op['id']],
+      );
+      return true;
+    }
+    return false;
   }
 
   static Future<int> contarOperacionesPendientes() async {

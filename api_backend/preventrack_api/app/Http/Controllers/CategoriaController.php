@@ -15,7 +15,7 @@ class CategoriaController extends Controller
             $query->where('nombre', 'like', '%' . $request->nombre . '%');
         }
 
-        return response()->json($query->paginate(20));
+        return response()->json($query->paginate($this->porPagina($request)));
     }
 
     public function store(Request $request)

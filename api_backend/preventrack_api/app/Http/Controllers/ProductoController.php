@@ -23,7 +23,7 @@ class ProductoController extends Controller
             $query->where('categoria_id', $request->categoria_id);
         }
 
-        return response()->json($query->paginate(20));
+        return response()->json($query->paginate($this->porPagina($request)));
     }
 
    public function store(Request $request)
